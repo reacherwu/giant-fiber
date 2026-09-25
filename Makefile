@@ -25,6 +25,9 @@ px4-test: build
 px4-bench: build
 	python3 benchmarks/px4_sitl_benchmark.py
 
+sensor-bench: build
+	python3 benchmarks/sensor_and_can_benchmark.py
+
 assets:
 	python3 scripts/generate_logo.py
 	python3 scripts/generate_media_assets.py

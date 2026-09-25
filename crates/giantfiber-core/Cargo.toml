@@ -12,4 +12,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # Zero external dependencies for maximum portability, zero-bloat, and sub-millisecond execution
 
+[features]
+default = ["std"]
+std = []
+
 [dev-dependencies]
