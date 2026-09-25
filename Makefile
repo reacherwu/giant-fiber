@@ -19,6 +19,15 @@ bench: build
 stress: build
 	python3 benchmarks/stress_and_performance_suite.py
 
+px4-test: build
+	python3 -m unittest tests/test_px4_sitl_integration.py -v
+
+px4-bench: build
+	python3 benchmarks/px4_sitl_benchmark.py
+
+assets:
+	python3 scripts/generate_media_assets.py
+
 demo: build
 	python3 examples/nerf_incoming_demo.py
 
