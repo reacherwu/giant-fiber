@@ -267,10 +267,10 @@ make assets
 
 1. **Phase 1: PX4 伴侣守卫 (Companion Guardian)** *(已完成 ✅)*  
    提供原生 MAVLink v2 桥接驱动与 SITL 闭环仿真支持，实现端到端 $< 15\ \mu\text{s}$ 抢占。
-2. **Phase 2: 硬件原型板 (Smart Bio-Eye)** *(进行中 ⏳)*  
-   将 Prophesee GenX320 事件传感器与 STM32N6 / Kria FPGA 固化在一枚低于 10g 的硬币大小模块上，直接输出 CAN-FD 避障指令。
-3. **Phase 3: 纯 Verilog RTL 硅核授权 (Silicon RTL IP Core)** *(规划中 🔮)*  
-   将果蝇稀疏连接拓扑固化为纯硬件 ASIC 逻辑门，实现微秒以内的纯物理避险。
+2. **Phase 2: 仿生复眼与硬件传感器底座 (Smart Bio-Eye & Sensor Stack)** *(已完成交付 ✅)*  
+   交付 Prophesee 原生 EVT2/EVT3 二进制流解码器（184万脉冲/秒）、24字节工业级 CAN-FD 反射总线驱动（<12µs）以及 `no_std` 裸机嵌入式底层支持。
+3. **Phase 3: 纯 Verilog RTL 硅核授权 (Silicon RTL IP Core)** *(进行中 ⏳)*  
+   将果蝇稀疏连接拓扑固化为硬件 Verilog/SystemVerilog RTL 硬件加速器电路，面向无人机与机器人主控芯片大厂进行 ASIC IP 授权。
 
 ---
 

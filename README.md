@@ -272,10 +272,10 @@ Assets saved in `docs/assets/`:
 
 1. **Phase 1: PX4 Companion Guardian** *(Completed ✅)*  
    Native MAVLink v2 bridge, SITL testing suite, and $< 15\ \mu\text{s}$ evasion preemption.
-2. **Phase 2: Smart Bio-Eye Hardware Module** *(In Progress ⏳)*  
-   Integrated coin-sized (<10g) board pairing the Prophesee GenX320 DVS sensor with STM32N6 / Kria FPGA, outputting CAN-FD action packets.
-3. **Phase 3: Silicon RTL IP Core** *(Planned 🔮)*  
-   Pure Verilog RTL implementation of the sparse connectome graph accelerator for ASIC licensing to drone & robotics silicon vendors.
+2. **Phase 2: Smart Bio-Eye Hardware & Sensor Integration** *(Delivered ✅)*  
+   Native Prophesee EVT2/EVT3 binary stream decoder (1.84M events/s), 24-byte industrial CAN-FD reflex bus driver (<12µs), and `no_std` embedded bare-metal support.
+3. **Phase 3: Silicon RTL IP Core** *(In Progress ⏳)*  
+   Pure Verilog/SystemVerilog RTL hardware implementation of the sparse connectome graph accelerator for ASIC licensing to drone & robotics silicon vendors.
 
 ---
 
