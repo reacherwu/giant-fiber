@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/logo.png" alt="GiantFiber (GF-1) Logo" width="160"/>
+
 # GiantFiber (GF-1)
 ### Sub-5ms, Sub-1W Bio-Reflex Coprocessor for Autonomous Drones & Robots
 **Drosophila Connectome Prior (FlyWire / MaleCNS) × Jev System-1 Calibrated Decision Theory × PX4-Autopilot Flight Stack**

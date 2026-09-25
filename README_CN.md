@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/logo.png" alt="GiantFiber (GF-1) Logo" width="160"/>
+
 # GiantFiber (GF-1)
 ### Sub-5ms, Sub-1W Bio-Reflex Coprocessor for Autonomous Drones & Robots
 **果蝇全脑连接组（FlyWire / MaleCNS）先验 × Jev 强类型毫秒决策引擎 × PX4-Autopilot 工业飞控**
