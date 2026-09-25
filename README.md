@@ -31,6 +31,14 @@
 
 ---
 
+### ⚠️ Disclaimer & Trademark Notice
+
+GiantFiber is an independent open-source research and engineering initiative. It is neither affiliated with, sponsored by, nor endorsed by commercial foundation model providers or proprietary drone manufacturers. 
+
+`PX4`, `Pixhawk`, and `MAVLink` are trademarks of their respective owners (Dronecode Foundation and Pixhawk Project), referenced here strictly under nominative fair use to describe technical compatibility and protocol compliance.
+
+---
+
 ### 💡 Why GiantFiber? (From the Builder's Perspective)
 
 If you design autonomous drones (UAVs), quadruped robots, or agile mobile systems, you have almost certainly encountered this painful physical reality:
