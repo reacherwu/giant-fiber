@@ -58,10 +58,9 @@ impl LobulaPlateCircuit {
         let mut top_energy = 0.0f32;
         let mut bottom_energy = 0.0f32;
 
-        // Sample spatial gradients with step size 2 for microsecond execution
-        let step = 2;
-        for y in (1..(SURFACE_HEIGHT - 1)).step_by(step) {
-            for x in (1..(SURFACE_WIDTH - 1)).step_by(step) {
+        // Sample spatial gradients across full receptive field for maximum precision
+        for y in 1..(SURFACE_HEIGHT - 1) {
+            for x in 1..(SURFACE_WIDTH - 1) {
                 let s_curr = accumulator.get_surface_value(x, y);
                 if s_curr.abs() < 0.005 {
                     continue;
@@ -79,9 +78,9 @@ impl LobulaPlateCircuit {
                 hs_sum += grad_x;
                 vs_sum += grad_y;
 
-                // Divergence component relative to center: (x - cx)*vx + (y - cy)*vy
-                let dx = (x as f32) - (mid_x as f32);
-                let dy = (y as f32) - (mid_y as f32);
+                // Divergence component relative to stimulus centroid: (x - cx)*vx + (y - cy)*vy
+                let dx = (x as f32) - accumulator.centroid_x;
+                let dy = (y as f32) - accumulator.centroid_y;
                 let radial_div = dx * grad_x + dy * grad_y;
                 div_sum += radial_div;
 
@@ -106,13 +105,13 @@ impl LobulaPlateCircuit {
         let total_vert = (top_energy + bottom_energy).max(0.1);
         let vert_asym = (bottom_energy - top_energy) / total_vert;
 
-        // Combine with accumulator's temporal expansion rate
-        let combined_divergence = (div_sum * 0.001) + (accumulator.expansion_rate * 0.8);
+        // Spatial optic flow divergence from retinal gradient field
+        let spatial_divergence = div_sum * 0.001;
 
         let flow = OpticFlowField {
             hs_flow: hs_sum * 0.002,
             vs_flow: vs_sum * 0.002,
-            divergence: combined_divergence,
+            divergence: spatial_divergence,
             horizontal_asymmetry: horiz_asym.clamp(-1.0, 1.0),
             vertical_asymmetry: vert_asym.clamp(-1.0, 1.0),
         };

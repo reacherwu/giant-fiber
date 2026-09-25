@@ -41,12 +41,12 @@ impl DecisionCalibrator {
         logits[ReflexAction::Cruise as usize] = 0.5;
 
         if escape.gf_fired {
-            // Assign high logit to the anatomically recommended evasion action
+            // Assign calibrated logit proportional to genuine supra-threshold depolarization
             let act_idx = escape.recommended_action as usize;
             if act_idx < NUM_ACTIONS {
-                logits[act_idx] = escape.raw_logit.max(2.0);
-                // Lower baseline cruise logit when escape fires
-                logits[ReflexAction::Cruise as usize] = -2.0;
+                logits[act_idx] = escape.raw_logit;
+                // Lower baseline cruise logit proportionally to threat strength
+                logits[ReflexAction::Cruise as usize] = (0.5 - escape.raw_logit).clamp(-5.0, 0.5);
             }
         }
 

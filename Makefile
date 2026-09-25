@@ -16,6 +16,9 @@ test-python:
 bench: build
 	python3 benchmarks/latency_throughput.py
 
+stress: build
+	python3 benchmarks/stress_and_performance_suite.py
+
 demo: build
 	python3 examples/nerf_incoming_demo.py
 

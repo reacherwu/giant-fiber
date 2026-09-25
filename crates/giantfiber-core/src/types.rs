@@ -159,7 +159,7 @@ impl Default for EngineConfig {
         Self {
             confidence_threshold: 0.85,
             temperature: 1.0,
-            looming_threshold: 0.65,
+            looming_threshold: 3.0,
             decay_tau_us: 25000.0,
             refractory_period_us: 50000,
         }

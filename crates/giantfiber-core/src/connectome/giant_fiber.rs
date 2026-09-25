@@ -56,10 +56,10 @@ impl GiantFiberCircuit {
     pub fn new(firing_threshold: f32, refractory_us: u64) -> Self {
         Self {
             v_membrane: 0.0,
-            firing_threshold: if firing_threshold > 0.0 { firing_threshold } else { 0.65 },
+            firing_threshold: if firing_threshold > 0.0 { firing_threshold } else { 3.0 },
             last_fire_time_us: 0,
             refractory_us: if refractory_us > 0 { refractory_us } else { 50000 },
-            col4_weight: 1.4,
+            col4_weight: 1.6,
             lptc_weight: 1.0,
         }
     }
@@ -89,13 +89,15 @@ impl GiantFiberCircuit {
             };
         }
 
-        // Col4 looming signal: non-linear expansion velocity
-        let looming_stimulus = expansion_rate.max(0.0) * self.col4_weight;
-        let lptc_stimulus = flow.divergence.max(0.0) * self.lptc_weight;
+        // Biological Integration on Giant Fiber Dendritic Arbor:
+        // Col4 expansion rate + LPTC optic flow divergence with bidirectional GABAergic inhibition.
+        let scaled_expansion = expansion_rate * 0.02;
+        let looming_stimulus = (scaled_expansion * self.col4_weight).clamp(-1.0, 10.0);
+        let lptc_stimulus = (flow.divergence * self.lptc_weight).clamp(-1.0, 10.0);
 
-        // Giant Fiber leaky integration
-        let leak_factor = 0.85f32;
-        self.v_membrane = (self.v_membrane * leak_factor) + (looming_stimulus + lptc_stimulus);
+        // Giant Fiber leaky integration with floor at resting potential (0.0)
+        let leak_factor = 0.65f32;
+        self.v_membrane = ((self.v_membrane * leak_factor) + looming_stimulus + lptc_stimulus).max(0.0);
 
         let fired = self.v_membrane >= self.firing_threshold;
         let raw_logit = (self.v_membrane - self.firing_threshold) * 5.0;

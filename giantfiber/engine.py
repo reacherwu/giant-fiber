@@ -84,6 +84,19 @@ class GiantFiberCoprocessor:
             packet.sensor_height,
         )
 
+    def feed_raw_spikes(self, buffer: bytes, raw_w: int = 320, raw_h: int = 320):
+        """Zero-overhead ingestion of raw binary spike buffer from DVS camera driver.
+
+        Directly maps bytes to C_EventSpike without allocating intermediate Python objects.
+        """
+        spike_size = ctypes.sizeof(C_EventSpike)
+        count = len(buffer) // spike_size
+        if count == 0:
+            return
+        raw_char_arr = (ctypes.c_char * len(buffer)).from_buffer_copy(buffer)
+        ptr = ctypes.cast(raw_char_arr, ctypes.POINTER(C_EventSpike))
+        self._binding.lib.gf_feed_events_batch(self._engine_ptr, ptr, count, raw_w, raw_h)
+
     def update_imu(
         self,
         gyro: Tuple[float, float, float],

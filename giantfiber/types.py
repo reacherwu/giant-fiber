@@ -76,6 +76,6 @@ class ReflexConfig(BaseModel):
     """Configurable hyperparameters for the GiantFiber coprocessor."""
     confidence_threshold: float = Field(default=0.85, ge=0.5, le=1.0)
     temperature: float = Field(default=1.0, ge=0.1, le=5.0)
-    looming_threshold: float = Field(default=0.65, ge=0.1, le=5.0)
+    looming_threshold: float = Field(default=3.0, ge=0.1, le=20.0)
     decay_tau_us: float = Field(default=25000.0, ge=1000.0)
     refractory_period_us: int = Field(default=50000, ge=0)

@@ -27,7 +27,7 @@ fn test_event_accumulator_bounded_updates() {
 
 #[test]
 fn test_giant_fiber_looming_evasion_activation() {
-    let mut gf = GiantFiberCircuit::new(0.5, 50000);
+    let mut gf = GiantFiberCircuit::new(2.0, 50000);
     let flow = OpticFlowField {
         hs_flow: 0.1,
         vs_flow: 0.0,
@@ -35,8 +35,8 @@ fn test_giant_fiber_looming_evasion_activation() {
         horizontal_asymmetry: 0.7, // Looming on the right
         vertical_asymmetry: 0.0,
     };
-    // Feed high expansion rate
-    let out = gf.step(&flow, 1.2, 10000);
+    // Feed high physical expansion rate (150.0 rad/s)
+    let out = gf.step(&flow, 150.0, 10000);
     assert!(out.gf_fired, "Giant fiber should fire on rapid looming");
     // Drosophila avoids away from threat: threat on right -> roll LEFT!
     assert_eq!(out.recommended_action, ReflexAction::RollLeft90);
@@ -60,7 +60,7 @@ fn test_full_engine_pipeline_and_latency() {
     let config = EngineConfig {
         confidence_threshold: 0.80,
         temperature: 0.9,
-        looming_threshold: 0.5,
+        looming_threshold: 2.0,
         decay_tau_us: 20000.0,
         refractory_period_us: 40000,
     };

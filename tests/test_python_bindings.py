@@ -75,6 +75,9 @@ class TestCoprocessorEngine(unittest.TestCase):
         # Simulate an approaching high-speed obstacle expanding on the left
         # Spikes moving outward radially
         now_us = 10000
+        # Establish baseline before stimulus onset
+        self.coprocessor.step_eval(now_us=now_us)
+
         for step in range(1, 15):
             t = now_us + step * 250
             radius = step * 4

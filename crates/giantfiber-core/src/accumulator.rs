@@ -98,15 +98,25 @@ impl EventAccumulator {
             self.current_time_us = now_us;
         }
 
+        if self.prev_radius_time_us == 0 {
+            // First evaluation step: establish baseline
+            self.prev_radius = self.radius;
+            self.prev_radius_time_us = self.current_time_us;
+            self.expansion_rate = 0.0;
+            return;
+        }
+
         let dt_us = self.current_time_us.saturating_sub(self.prev_radius_time_us);
-        if dt_us >= 1000 {
-            // Evaluated over at least 1ms window
+        if dt_us >= 500 {
+            // Evaluated over at least 0.5ms window
             let dr = self.radius - self.prev_radius;
             let dt_sec = (dt_us as f32) / 1_000_000.0;
-            // Expansion velocity in normalized pixels/sec
             let vel = dr / dt_sec;
-            // Looming expansion metric: dr / (r * dt) = expansion rate
-            self.expansion_rate = vel / self.prev_radius.max(0.5);
+            let instant_expansion = vel / self.prev_radius.max(0.5);
+
+            // Biological low-pass filter (tau ~ 4ms) to suppress single-frame random white noise
+            let smooth_alpha = 0.35f32;
+            self.expansion_rate = (1.0 - smooth_alpha) * self.expansion_rate + smooth_alpha * instant_expansion;
 
             self.prev_radius = self.radius;
             self.prev_radius_time_us = self.current_time_us;
