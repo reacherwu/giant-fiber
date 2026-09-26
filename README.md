@@ -23,7 +23,7 @@
 <img src="docs/assets/evasion_simulation.gif" alt="GiantFiber 14 m/s Projectile Evasion Simulation" width="880"/>
 
 *High-Fidelity Real-Dynamics Hardware-in-the-Loop Simulation: A 14 m/s Nerf projectile approaching a drone in flight. Col4 retinal looming expansion triggers Giant Fiber reflex in **1.09 µs**, preempting PX4 Autopilot via MAVLink v2 to execute an explosive 90° knife-edge roll evasion (0.45m clearance miss, 0.0% false trigger rate).*  
-*(High-definition 60fps MP4 video available at: [`docs/assets/evasion_demo.mp4`](docs/assets/evasion_demo.mp4))*
+*(High-definition 60fps MP4 video: [`docs/assets/evasion_demo.mp4`](docs/assets/evasion_demo.mp4) | 🎮 **[Launch Interactive 60fps Multi-Domain Web Simulation](docs/simulation.html)** across Drones, Humanoid Robots, Mining & Medical Robotics)*
 
 <br/>
 

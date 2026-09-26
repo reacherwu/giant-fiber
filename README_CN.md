@@ -23,7 +23,7 @@
 <img src="docs/assets/evasion_simulation.gif" alt="GiantFiber 14 m/s Projectile Evasion Simulation" width="880"/>
 
 *14 m/s 高速弹丸逼近仿真：果蝇 Col4 视网膜光流扩张在 1.09 µs 触发巨纤维反射，通过 MAVLink 注入 PX4 飞控实现 90° 侧滚极速避障（净避障间距 0.45 米，误触率 0.0%）。*  
-*(注：本地可查看高清短片：[`docs/assets/evasion_demo.mp4`](docs/assets/evasion_demo.mp4))*
+*(注：本地可查看高清短片：[`docs/assets/evasion_demo.mp4`](docs/assets/evasion_demo.mp4) | 🎮 **[打开多领域交互式 60FPS 物理仿真动画](docs/simulation.html)** 涵盖无人机、人形具身智能、矿业落石、微创医疗四大工业场景)*
 
 <br/>
 
