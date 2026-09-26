@@ -59,6 +59,9 @@ impl GiantFiberEngine {
     }
 
     pub fn update_imu(&mut self, imu: &ImuData) {
+        if !imu.gyro_z.is_finite() {
+            return;
+        }
         if self.last_imu_time_us > 0 && imu.timestamp_us > self.last_imu_time_us {
             let dt_s = ((imu.timestamp_us - self.last_imu_time_us) as f32) / 1_000_000.0;
             self.central_complex.update(imu.gyro_z, dt_s);
@@ -85,16 +88,18 @@ impl GiantFiberEngine {
         // 4. Central Complex Heading & Stabilization State
         let compass_state = self.central_complex.state;
 
-        let elapsed_us = start.elapsed().as_micros() as u32;
-
         // 5. Jev System-1 Calibrated Decision Gatekeeper
-        self.calibrator.calibrate(
+        let mut decision = self.calibrator.calibrate(
             &escape_output,
             &compass_state,
             &self.config,
             current_us,
-            elapsed_us,
-        )
+            0,
+        );
+
+        // Capture total pipeline latency including gatekeeper calibration
+        decision.compute_latency_us = start.elapsed().as_micros() as u32;
+        decision
     }
 
     /// Create snapshot of internal engine state.
@@ -105,10 +110,17 @@ impl GiantFiberEngine {
             timestamp_us: self.accumulator.current_time_us,
             current_time_us: self.accumulator.current_time_us,
             last_fire_time_us: self.giant_fiber.last_fire_time_us,
+            last_imu_time_us: self.last_imu_time_us,
             v_membrane: self.giant_fiber.v_membrane,
             expansion_rate: self.accumulator.expansion_rate,
+            centroid_x: self.accumulator.centroid_x,
+            centroid_y: self.accumulator.centroid_y,
+            radius: self.accumulator.radius,
+            prev_radius: self.accumulator.prev_radius,
+            prev_radius_time_us: self.accumulator.prev_radius_time_us,
             heading_rad: self.central_complex.state.heading_rad,
             target_heading_rad: self.central_complex.target_heading_rad,
+            correction_torque: self.central_complex.state.correction_torque,
             wedges: self.central_complex.state.wedges,
             config: self.config,
             checksum: 0,
@@ -121,12 +133,26 @@ impl GiantFiberEngine {
         let snapshot = EngineSnapshot::deserialize(buffer)?;
         self.accumulator.current_time_us = snapshot.current_time_us;
         self.accumulator.expansion_rate = snapshot.expansion_rate;
+        self.accumulator.centroid_x = snapshot.centroid_x;
+        self.accumulator.centroid_y = snapshot.centroid_y;
+        self.accumulator.radius = snapshot.radius;
+        self.accumulator.prev_radius = snapshot.prev_radius;
+        self.accumulator.prev_radius_time_us = snapshot.prev_radius_time_us;
+        self.last_imu_time_us = snapshot.last_imu_time_us;
         self.giant_fiber.last_fire_time_us = snapshot.last_fire_time_us;
         self.giant_fiber.v_membrane = snapshot.v_membrane;
         self.central_complex.state.heading_rad = snapshot.heading_rad;
         self.central_complex.target_heading_rad = snapshot.target_heading_rad;
         self.central_complex.state.wedges = snapshot.wedges;
+        self.central_complex.state.correction_torque = snapshot.correction_torque;
         self.config = snapshot.config;
+
+        // Synchronize restored configuration across circuits
+        self.accumulator.tau_us = self.config.decay_tau_us;
+        self.giant_fiber.firing_threshold = self.config.looming_threshold;
+        self.giant_fiber.refractory_us = self.config.refractory_period_us;
+        self.calibrator.temperature = self.config.temperature;
+        self.calibrator.threshold = self.config.confidence_threshold;
         Ok(())
     }
 }

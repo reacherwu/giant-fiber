@@ -50,6 +50,20 @@ MAVLINK_CRC_EXTRA: Dict[int, int] = {
     105: 93,  # HIGHRES_IMU
 }
 
+# Standard MAVLink Full Payload Lengths (before MAVLink 2 zero-truncation)
+MAVLINK_MESSAGE_LENGTHS: Dict[int, int] = {
+    0: 9,     # HEARTBEAT
+    82: 39,   # SET_ATTITUDE_TARGET
+    105: 62,  # HIGHRES_IMU
+}
+
+# Standard MAVLink ATTITUDE_TARGET_TYPEMASK Bitflags
+ATTITUDE_TARGET_TYPEMASK_BODY_ROLL_RATE_IGNORE = 1 << 0   # 1
+ATTITUDE_TARGET_TYPEMASK_BODY_PITCH_RATE_IGNORE = 1 << 1  # 2
+ATTITUDE_TARGET_TYPEMASK_BODY_YAW_RATE_IGNORE = 1 << 2    # 4
+ATTITUDE_TARGET_TYPEMASK_THROTTLE_IGNORE = 1 << 6         # 64
+ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE = 1 << 7         # 128 (0x80)
+
 
 @dataclass
 class MAVLinkMessage:
@@ -103,6 +117,11 @@ class MAVLinkV2Codec:
         if received_crc != expected_crc:
             return None  # Checksum mismatch
         
+        # MAVLink 2 zero-byte truncation handling: pad payload to expected full length
+        expected_full_len = MAVLINK_MESSAGE_LENGTHS.get(msgid, len(payload))
+        if len(payload) < expected_full_len:
+            payload = payload.ljust(expected_full_len, b"\x00")
+
         parsed_fields = MAVLinkV2Codec.parse_payload(msgid, payload)
         return MAVLinkMessage(
             msgid=msgid,
@@ -130,6 +149,7 @@ class MAVLinkV2Codec:
                 "xacc": xacc, "yacc": yacc, "zacc": zacc,
                 "xgyro": xgyro, "ygyro": ygyro, "zgyro": zgyro,
                 "temperature": temperature,
+                "fields_updated": fields_updated,
             }
         elif msgid == 0 and len(payload) >= 9:  # HEARTBEAT
             custom_mode, m_type, autopilot, base_mode, system_status, mavlink_version = struct.unpack(
@@ -143,26 +163,26 @@ class MAVLinkV2Codec:
                 "system_status": system_status,
                 "mavlink_version": mavlink_version,
             }
-        elif msgid == 82 and len(payload) >= 39:  # SET_ATTITUDE_TARGET
+        elif msgid == 82 and len(payload) >= 39:  # SET_ATTITUDE_TARGET (Wire layout: <I8fBBB)
             (
                 time_boot_ms,
-                target_sys,
-                target_comp,
-                type_mask,
                 q0, q1, q2, q3,
                 body_roll_rate, body_pitch_rate, body_yaw_rate,
                 thrust,
-            ) = struct.unpack("<IBBB4fffff", payload[:39])
+                target_sys,
+                target_comp,
+                type_mask,
+            ) = struct.unpack("<I8fBBB", payload[:39])
             fields = {
                 "time_boot_ms": time_boot_ms,
-                "target_sys": target_sys,
-                "target_comp": target_comp,
-                "type_mask": type_mask,
                 "q": (q0, q1, q2, q3),
                 "body_roll_rate": body_roll_rate,
                 "body_pitch_rate": body_pitch_rate,
                 "body_yaw_rate": body_yaw_rate,
                 "thrust": thrust,
+                "target_sys": target_sys,
+                "target_comp": target_comp,
+                "type_mask": type_mask,
             }
         return fields
 
@@ -178,18 +198,18 @@ class MAVLinkV2Codec:
         body_yaw_rate: float,
         thrust: float,
     ) -> bytes:
-        """Packs a MAVLink SET_ATTITUDE_TARGET payload (39 bytes)."""
+        """Packs a MAVLink SET_ATTITUDE_TARGET payload according to official MAVLink wire format (<I8fBBB, 39 bytes)."""
         return struct.pack(
-            "<IBBB4fffff",
+            "<I8fBBB",
             time_boot_ms,
-            target_sys,
-            target_comp,
-            type_mask,
             q[0], q[1], q[2], q[3],
             body_roll_rate,
             body_pitch_rate,
             body_yaw_rate,
             thrust,
+            target_sys,
+            target_comp,
+            type_mask,
         )
 
     @staticmethod
@@ -264,6 +284,22 @@ class PX4ReflexBridge:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
+    def handle_message(self, msg: MAVLinkMessage) -> Optional[ReflexDecision]:
+        """Processes a decoded MAVLinkMessage and updates internal state."""
+        if msg.msgid == 105:  # HIGHRES_IMU
+            f = msg.fields
+            if "xgyro" in f and "ygyro" in f and "zgyro" in f and "xacc" in f and "yacc" in f and "zacc" in f:
+                self.total_imu_ingested += 1
+                # Ingest angular rates (rad/s) and linear accelerations (m/s^2)
+                self.coprocessor.update_imu(
+                    gyro=(f["xgyro"], f["ygyro"], f["zgyro"]),
+                    accel=(f["xacc"], f["yacc"], f["zacc"]),
+                    timestamp_us=f.get("time_usec", 0),
+                )
+        return None
+
+    handle_mavlink_message = handle_message
+
     def handle_incoming_bytes(self, data: bytes) -> Optional[ReflexDecision]:
         """
         Parses incoming MAVLink bytes from PX4 and updates internal state.
@@ -272,17 +308,7 @@ class PX4ReflexBridge:
         msg = MAVLinkV2Codec.decode(data)
         if not msg:
             return None
-        
-        if msg.msgid == 105:  # HIGHRES_IMU
-            self.total_imu_ingested += 1
-            f = msg.fields
-            # Ingest angular rates (rad/s) and linear accelerations (m/s^2)
-            self.coprocessor.update_imu(
-                gyro=(f["xgyro"], f["ygyro"], f["zgyro"]),
-                accel=(f["xacc"], f["yacc"], f["zacc"]),
-                timestamp_us=f.get("time_usec", 0),
-            )
-        return None
+        return self.handle_message(msg)
 
     def feed_visual_spike(self, x: int, y: int, timestamp_us: int, polarity: int = 1) -> None:
         """Feeds a microsecond DVS event spike into the bio-reflex coprocessor."""
@@ -313,9 +339,10 @@ class PX4ReflexBridge:
         yaw_rate = 0.0
         thrust = self.config.evasion_thrust_boost
 
-        # Type mask: bit 0: roll rate, bit 1: pitch rate, bit 2: yaw rate, bit 6: attitude
-        # We command high-bandwidth body angular rates for maximum agility
-        type_mask = 0b10000111  # Ignore q, only body rates & thrust
+        # Type mask: We command body angular rates (roll, pitch, yaw) and thrust,
+        # so we set ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE (0x80) to ignore quaternion attitude.
+        # Bits 0, 1, 2 must be 0 so body roll rate, pitch rate, and yaw rate are NOT ignored!
+        type_mask = ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE  # 0x80 (128)
 
         if decision.action == ReflexAction.ROLL_RIGHT_90:
             roll_rate = self.config.evasion_roll_rate_rads

@@ -126,4 +126,57 @@ fn test_zero_loss_snapshot_persistence() {
 
     assert_eq!(new_engine.accumulator.current_time_us, engine.accumulator.current_time_us);
     assert_eq!(new_engine.central_complex.state.heading_rad, engine.central_complex.state.heading_rad);
+    assert_eq!(new_engine.accumulator.centroid_x, engine.accumulator.centroid_x);
+    assert_eq!(new_engine.accumulator.centroid_y, engine.accumulator.centroid_y);
+    assert_eq!(new_engine.accumulator.radius, engine.accumulator.radius);
+    assert_eq!(new_engine.accumulator.prev_radius, engine.accumulator.prev_radius);
+    assert_eq!(new_engine.accumulator.prev_radius_time_us, engine.accumulator.prev_radius_time_us);
+    assert_eq!(new_engine.central_complex.state.correction_torque, engine.central_complex.state.correction_torque);
+    assert_eq!(new_engine.accumulator.tau_us, engine.config.decay_tau_us);
+}
+
+#[test]
+fn test_normalize_angle_inf_nan_guards() {
+    use giantfiber_core::connectome::central_complex::normalize_angle;
+    // Must return 0.0 for non-finite values without hanging or panicking
+    assert_eq!(normalize_angle(f32::INFINITY), 0.0);
+    assert_eq!(normalize_angle(f32::NEG_INFINITY), 0.0);
+    assert_eq!(normalize_angle(f32::NAN), 0.0);
+
+    // Large multiples of 2*PI must wrap in O(1)
+    let wrapped = normalize_angle(1000000.0 * core::f32::consts::PI);
+    assert!(wrapped.abs() <= core::f32::consts::PI + 1e-4);
+}
+
+#[test]
+fn test_compass_reset_clears_torque() {
+    let mut cx = CentralComplexCircuit::new();
+    cx.update(1.5, 0.5);
+    assert!(cx.state.correction_torque.z != 0.0);
+
+    cx.reset();
+    assert_eq!(cx.state.correction_torque.x, 0.0);
+    assert_eq!(cx.state.correction_torque.y, 0.0);
+    assert_eq!(cx.state.correction_torque.z, 0.0);
+    assert!(cx.state.heading_rad.abs() < 1e-6);
+}
+
+#[test]
+fn test_accumulator_off_polarity_decay() {
+    let mut acc = EventAccumulator::new(25000.0);
+    // Feed OFF spike (polarity = 0)
+    let spike_off = EventSpike {
+        timestamp_us: 1000,
+        x: 160,
+        y: 160,
+        polarity: 0,
+        _pad: [0; 7],
+    };
+    acc.feed_spike(&spike_off, 320, 320);
+
+    // Surface value at center should be negative (-1.0 decayed), NOT 0.0
+    let sx = (160 * 64) / 320;
+    let sy = (160 * 64) / 320;
+    let val = acc.get_surface_value(sx, sy);
+    assert!(val < -0.9, "OFF event should produce negative decaying surface, got {}", val);
 }

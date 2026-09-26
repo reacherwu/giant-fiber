@@ -123,6 +123,26 @@ class TestCoprocessorEngine(unittest.TestCase):
             dec = fresh.step_eval(now_us=99000)
             self.assertEqual(dec.timestamp_us, 99000)
 
+    def test_imu_non_finite_input_handling(self):
+        """Verifies that non-finite floats (inf, -inf, nan) in IMU do not hang or crash."""
+        self.coprocessor.update_imu(gyro=(0.0, 0.0, float("inf")), timestamp_us=1000)
+        self.coprocessor.update_imu(gyro=(0.0, 0.0, float("nan")), timestamp_us=2000)
+        self.coprocessor.update_imu(gyro=(0.0, 0.0, float("-inf")), timestamp_us=3000)
+        dec = self.coprocessor.step_eval(now_us=4000)
+        self.assertIsNotNone(dec)
+        self.assertTrue(math.isfinite(dec.vector.z))
+
+    def test_reset_clears_compass_torque(self):
+        """Verifies that engine reset clears residual compass correction torque."""
+        self.coprocessor.update_imu(gyro=(0.0, 0.0, 2.0), timestamp_us=1000)
+        self.coprocessor.update_imu(gyro=(0.0, 0.0, 2.0), timestamp_us=200000)
+        dec_before = self.coprocessor.step_eval(now_us=200000)
+        self.assertLess(dec_before.vector.z, -0.01)
+
+        self.coprocessor.reset()
+        dec_after = self.coprocessor.step_eval(now_us=200001)
+        self.assertAlmostEqual(dec_after.vector.z, 0.0, places=4)
+
 
 if __name__ == "__main__":
     unittest.main()

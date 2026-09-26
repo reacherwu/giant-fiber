@@ -77,7 +77,7 @@ impl EventAccumulator {
             .min(SURFACE_HEIGHT - 1);
 
         self.last_timestamp[sy][sx] = spike.timestamp_us;
-        self.polarity_surface[sy][sx] = spike.polarity;
+        self.polarity_surface[sy][sx] = if spike.polarity == 0 { -1 } else { spike.polarity };
         self.recent_event_count = self.recent_event_count.saturating_add(1);
 
         // Exponential moving average for Centroid

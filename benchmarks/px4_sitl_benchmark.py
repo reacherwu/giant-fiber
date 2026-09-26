@@ -102,15 +102,21 @@ def run_px4_benchmark():
     print(f"  • p99 Latency  : {p99_ovr:.2f} µs")
     print(f"  • Packet Size  : {len(packet)} bytes (MAVLink v2 standard)")
 
-    # 3. Full Roundtrip: Spike In -> Eval -> MAVLink Override Out
+    # 3. Full Roundtrip: Spike In -> Connectome Eval -> MAVLink Override Serialization
     latencies_full = []
+    override_count = 0
     for i in range(5000):
         t_now = t_base + 20000 + i * 100
         t0 = time.perf_counter_ns()
         # Feed high-priority threat spike
         bridge.feed_visual_spike(32, 32, t_now, polarity=1)
         dec = bridge.step_eval(t_now)
+        # Dispatch MAVLink SET_ATTITUDE_TARGET override packet
+        override_target = dec if dec.triggered else bridge.last_decision
+        override_pkt = bridge.dispatch_evasion_override(override_target)
         t1 = time.perf_counter_ns()
+        if override_pkt:
+            override_count += 1
         latencies_full.append((t1 - t0) / 1000.0)
 
     mean_full = statistics.mean(latencies_full)

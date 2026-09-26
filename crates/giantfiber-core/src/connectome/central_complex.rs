@@ -52,6 +52,7 @@ impl CentralComplexCircuit {
 
     /// Reset compass to forward orientation (heading = 0.0).
     pub fn reset(&mut self) {
+        self.state = CompassState::default();
         self.target_heading_rad = 0.0;
         self.init_bump(0.0);
     }
@@ -71,6 +72,9 @@ impl CentralComplexCircuit {
 
     /// Integrate angular velocity (e.g. from IMU gyro_z or LPTC horizontal optic flow).
     pub fn update(&mut self, yaw_rate_rad_s: f32, dt_s: f32) -> CompassState {
+        if !yaw_rate_rad_s.is_finite() || !dt_s.is_finite() || dt_s <= 0.0 {
+            return self.state;
+        }
         let d_theta = yaw_rate_rad_s * dt_s;
         let new_heading = normalize_angle(self.state.heading_rad + d_theta);
         self.init_bump(new_heading);
@@ -109,12 +113,15 @@ impl CentralComplexCircuit {
 }
 
 #[inline(always)]
-fn normalize_angle(mut a: f32) -> f32 {
-    while a > PI {
-        a -= 2.0 * PI;
+pub fn normalize_angle(a: f32) -> f32 {
+    if !a.is_finite() {
+        return 0.0;
     }
-    while a < -PI {
-        a += 2.0 * PI;
+    let two_pi = 2.0 * PI;
+    let wrapped = (a + PI).rem_euclid(two_pi) - PI;
+    if wrapped <= -PI {
+        PI
+    } else {
+        wrapped
     }
-    a
 }

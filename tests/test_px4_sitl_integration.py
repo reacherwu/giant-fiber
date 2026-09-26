@@ -108,6 +108,41 @@ class TestPX4MAVLinkIntegration(unittest.TestCase):
         self.assertNotEqual(decoded_override.fields["body_roll_rate"], 0.0)
         self.assertGreater(decoded_override.fields["thrust"], 0.8)
 
+        # Wire layout verification: target_sys (offset 36), target_comp (37), type_mask (38)
+        payload = decoded_override.payload
+        self.assertEqual(len(payload), 39)
+        self.assertEqual(payload[36], 1)   # target_sys
+        self.assertEqual(payload[37], 1)   # target_comp
+        self.assertEqual(payload[38], 0x80) # ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE (0x80)
+
+        # Ensure body rate ignore bits (0, 1, 2) are NOT set!
+        self.assertEqual(payload[38] & 0b111, 0)
+
+        bridge.close()
+
+    def test_mavlink_v2_zero_truncation_handling(self):
+        """Verifies MAVLink 2 legal zero-byte truncation is safely padded on reception."""
+        # Create a HEARTBEAT message whose payload has trailing zero bytes truncated
+        full_payload = MAVLinkV2Codec.pack_heartbeat(autopilot=0, vehicle_type=0)
+        # Strip trailing zeros (legal in MAVLink 2)
+        truncated_payload = full_payload.rstrip(b"\x00")
+        msg = MAVLinkMessage(msgid=0, sysid=1, compid=1, seq=5, payload=truncated_payload)
+        packet = MAVLinkV2Codec.encode(msg)
+
+        decoded = MAVLinkV2Codec.decode(packet)
+        self.assertIsNotNone(decoded)
+        self.assertEqual(decoded.msgid, 0)
+        self.assertEqual(decoded.fields.get("autopilot"), 0)
+        self.assertEqual(decoded.fields.get("type"), 0)
+
+    def test_imu_missing_fields_safe(self):
+        """Verifies malformed IMU messages do not crash the bridge."""
+        bridge = PX4ReflexBridge(PX4BridgeConfig())
+        # Message with empty dictionary payload
+        dummy_msg = MAVLinkMessage(msgid=105, sysid=1, compid=1, seq=1, payload=b"\x00" * 10, fields={})
+        res = bridge.handle_mavlink_message(dummy_msg)
+        self.assertIsNone(res)
+        self.assertEqual(bridge.total_imu_ingested, 0)
         bridge.close()
 
 

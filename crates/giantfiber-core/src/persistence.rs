@@ -4,11 +4,11 @@
 //! Guarantees sub-millisecond save/restore with 100% bit-exact state recovery.
 
 use core::mem::size_of;
-use crate::types::EngineConfig;
+use crate::types::{EngineConfig, Vector3D};
 use crate::connectome::central_complex::NUM_WEDGES;
 
 pub const SNAPSHOT_MAGIC: [u8; 4] = *b"GF1\0";
-pub const SNAPSHOT_VERSION: u32 = 1;
+pub const SNAPSHOT_VERSION: u32 = 2;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -18,10 +18,17 @@ pub struct EngineSnapshot {
     pub timestamp_us: u64,
     pub current_time_us: u64,
     pub last_fire_time_us: u64,
+    pub last_imu_time_us: u64,
     pub v_membrane: f32,
     pub expansion_rate: f32,
+    pub centroid_x: f32,
+    pub centroid_y: f32,
+    pub radius: f32,
+    pub prev_radius: f32,
+    pub prev_radius_time_us: u64,
     pub heading_rad: f32,
     pub target_heading_rad: f32,
+    pub correction_torque: Vector3D,
     pub wedges: [f32; NUM_WEDGES],
     pub config: EngineConfig,
     pub checksum: u32,

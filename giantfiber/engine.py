@@ -53,11 +53,12 @@ class GiantFiberCoprocessor:
 
     def feed_spike(self, x: int, y: int, timestamp_us: int, polarity: int = 1, raw_w: int = 320, raw_h: int = 320):
         """Feed a single asynchronous DVS event spike."""
+        pol = -1 if polarity == 0 else polarity
         spike = C_EventSpike(
             timestamp_us=timestamp_us,
             x=x,
             y=y,
-            polarity=polarity,
+            polarity=pol,
             _pad=(ctypes.c_uint8 * 7)(*([0] * 7)),
         )
         self._binding.lib.gf_feed_event(self._engine_ptr, ctypes.byref(spike), raw_w, raw_h)
@@ -74,7 +75,7 @@ class GiantFiberCoprocessor:
             spike_arr[i].timestamp_us = ev.timestamp_us
             spike_arr[i].x = ev.x
             spike_arr[i].y = ev.y
-            spike_arr[i].polarity = ev.polarity
+            spike_arr[i].polarity = -1 if ev.polarity == 0 else ev.polarity
 
         self._binding.lib.gf_feed_events_batch(
             self._engine_ptr,
