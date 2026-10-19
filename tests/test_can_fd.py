@@ -66,5 +66,59 @@ class TestCANFDIntegration(unittest.TestCase):
         self.assertEqual(frame.thrust, 0.95)
 
 
+    def test_escape_mode_field(self):
+        frame = CANFDReflexFrame(action=ReflexAction.ROLL_LEFT_90, confidence=0.9, escape_mode=2)
+        self.assertEqual(CANFDCodec.decode(CANFDCodec.encode(frame)).escape_mode, 2)
+
+    def test_rust_and_python_encoders_are_byte_identical(self):
+        """The no_std Rust encoder (via the C ABI) and the Python codec produce the same bytes."""
+        from giantfiber.binding import GiantFiberCoreBinding, C_ReflexOutput
+        from giantfiber.types import EscapeMode
+        b = GiantFiberCoreBinding()
+        cases = [
+            (ReflexAction.ROLL_RIGHT_90, 0.95, 7, EscapeMode.SHORT),
+            (ReflexAction.ROLL_LEFT_90, 0.8731, 13, EscapeMode.LONG),
+            (ReflexAction.PITCH_UP, 1.0, 65535, EscapeMode.SHORT),
+            (ReflexAction.BRAKE, 0.5, 0, EscapeMode.NONE),
+            (ReflexAction.CRUISE, 0.0, 99999, EscapeMode.NONE),
+        ]
+        for i, (action, conf, lat, mode) in enumerate(cases):
+            out = C_ReflexOutput()
+            out.action = int(action)
+            out.confidence = conf
+            out.compute_latency_us = lat
+            out.escape_mode = int(mode)
+            rust = b.canfd_encode(out, sequence=1000 + i, timestamp_ms=123456789 + i)
+            dec = ReflexDecision(action=action, confidence=conf, compute_latency_us=lat, timestamp_us=1,
+                                 escape_mode=mode)
+            py = CANFDCodec.encode(CANFDCodec.from_decision(dec, seq=1000 + i, timestamp_ms=123456789 + i))
+            self.assertEqual(rust, py, f"case {i}: {rust.hex()} != {py.hex()}")
+
+    def test_socketcan_frame_packing(self):
+        from giantfiber.integrations.can_fd import pack_canfd_frame, unpack_canfd_frame, CANFD_MTU
+        payload = CANFDCodec.encode(CANFDReflexFrame(action=ReflexAction.BRAKE, confidence=0.5))
+        raw = pack_canfd_frame(0x18F02001, payload)
+        self.assertEqual(len(raw), CANFD_MTU)
+        self.assertEqual(raw[4], 24)  # len
+        cid, data = unpack_canfd_frame(raw)
+        self.assertEqual(cid, 0x18F02001)
+        self.assertEqual(data, payload)
+
+    def test_socketcan_vcan_loopback(self):
+        """Runs only if a CAN-FD capable `vcan0` exists (e.g. in CI with the vcan module)."""
+        import os
+        import socket
+        if not hasattr(socket, "AF_CAN") or not os.path.exists("/sys/class/net/vcan0"):
+            self.skipTest("vcan0 not available")
+        from giantfiber.integrations.can_fd import SocketCANFDBus
+        with SocketCANFDBus("vcan0") as rx, SocketCANFDBus("vcan0") as tx:
+            frame = CANFDReflexFrame(action=ReflexAction.ROLL_RIGHT_90, confidence=0.9, sequence=5, escape_mode=2)
+            tx.send_frame(frame)
+            got = rx.recv_frame(timeout_s=1.0)
+        self.assertIsNotNone(got)
+        self.assertEqual(got.sequence, 5)
+        self.assertEqual(got.escape_mode, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

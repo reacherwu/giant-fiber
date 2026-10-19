@@ -12,7 +12,10 @@ from giantfiber import (
     CircuitTrace,
     EventPacket,
     EventSpike,
+    EscapeMode,
 )
+
+from _stimuli import run_loom
 
 
 class TestPydanticContracts(unittest.TestCase):
@@ -24,10 +27,10 @@ class TestPydanticContracts(unittest.TestCase):
             confidence=0.9642,
             vector=ReflexVector(x=-1.0, y=0.2, z=1.0),
             compute_latency_us=480,
-            circuit_trace=CircuitTrace.GIANT_FIBER_L1,
+            circuit_trace=CircuitTrace.GIANT_FIBER,
             timestamp_us=120000,
             triggered=True,
-            power_estimated_mw=620.0,
+            escape_mode=EscapeMode.SHORT,
         )
         self.assertEqual(decision.action, ReflexAction.ROLL_LEFT_90)
         self.assertEqual(decision.confidence, 0.9642)
@@ -53,50 +56,47 @@ class TestCoprocessorEngine(unittest.TestCase):
     """Verify real native Rust execution through C-ABI ctypes layer."""
 
     def setUp(self):
-        self.config = ReflexConfig(
-            confidence_threshold=0.80,
-            temperature=1.0,
-            looming_threshold=0.5,
-            decay_tau_us=25000.0,
-            refractory_period_us=30000,
-        )
+        self.config = ReflexConfig()
         self.coprocessor = GiantFiberCoprocessor(self.config)
 
     def tearDown(self):
         self.coprocessor.close()
 
+    def _loom(self, **kw):
+        return run_loom(self.coprocessor.step_eval, self.coprocessor.feed_raw_spikes, **kw)
+
     def test_nominal_cruise(self):
         decision = self.coprocessor.step_eval(now_us=1000)
         self.assertEqual(decision.action, ReflexAction.CRUISE)
         self.assertFalse(decision.triggered)
-        self.assertLess(decision.compute_latency_us, 1500)
+        self.assertEqual(decision.escape_mode, EscapeMode.NONE)
 
-    def test_looming_evasion_trigger(self):
-        # Simulate an approaching high-speed obstacle expanding on the left
-        # Spikes moving outward radially
-        now_us = 10000
-        # Establish baseline before stimulus onset
-        self.coprocessor.step_eval(now_us=now_us)
+    def test_fast_loom_triggers_short_mode_escape_away_from_object(self):
+        # object approaching slightly left of centre, r/v = 10 ms (fast)
+        decisions, first = self._loom(rv_ms=10.0, offset_x=-0.1)
+        self.assertIsNotNone(first, "fast loom must trigger")
+        self.assertTrue(any(d.escape_mode == EscapeMode.SHORT for d in decisions),
+                        "fast loom must reach the Giant Fiber (short) mode")
+        self.assertGreaterEqual(first.confidence, self.config.confidence_threshold)
+        self.assertEqual(first.action, ReflexAction.ROLL_RIGHT_90)
+        st = self.coprocessor.debug_state()
+        self.assertGreater(st["last_gf_spike_us"], 0)
 
-        for step in range(1, 15):
-            t = now_us + step * 250
-            radius = step * 4
-            for deg in range(0, 360, 45):
-                rad = math.radians(deg)
-                cx = 70 + int(radius * math.cos(rad))
-                cy = 160 + int(radius * math.sin(rad))
-                self.coprocessor.feed_spike(x=cx, y=cy, timestamp_us=t, polarity=1)
+    def test_slow_loom_uses_long_mode(self):
+        decisions, first = self._loom(rv_ms=80.0, z0=6.0, max_s=4.0)
+        self.assertIsNotNone(first, "slow loom must trigger")
+        self.assertEqual(first.escape_mode, EscapeMode.LONG)
+        self.assertEqual(first.circuit_trace, CircuitTrace.NON_GF_DESCENDING)
 
-        # Trigger evaluation
-        decision = self.coprocessor.step_eval(now_us=now_us + 4000)
-
-        # Should fire evasion reflex
-        self.assertTrue(decision.triggered, "High-speed looming must trigger reflex")
-        self.assertGreaterEqual(decision.confidence, 0.80)
-        # Threat on left -> Evasion rolls RIGHT
-        self.assertEqual(decision.action, ReflexAction.ROLL_RIGHT_90)
-        self.assertEqual(decision.circuit_trace, CircuitTrace.GIANT_FIBER_L1)
-        self.assertLess(decision.compute_latency_us, 1000, "Compute must be under 1ms")
+    def test_no_trigger_on_noise_only(self):
+        from giantfiber.sim.events import EventCamera
+        cam = EventCamera(noise_rate_hz=1.0, seed=3)
+        for k in range(1000):
+            ev = cam.step(None, 0.15, k * 1000 + 1, 1000)
+            if len(ev):
+                self.coprocessor.feed_raw_spikes(ev.tobytes())
+            d = self.coprocessor.step_eval(k * 1000 + 1000)
+            self.assertFalse(d.triggered, f"noise triggered at step {k}")
 
     def test_imu_heading_stabilization(self):
         # Yaw rate 1.5 rad/s
@@ -119,6 +119,7 @@ class TestCoprocessorEngine(unittest.TestCase):
         # Create new coprocessor and restore
         with GiantFiberCoprocessor(self.config) as fresh:
             fresh.restore_snapshot(snapshot_bytes)
+            self.assertEqual(fresh.save_snapshot(), snapshot_bytes)
             # Eval restored state
             dec = fresh.step_eval(now_us=99000)
             self.assertEqual(dec.timestamp_us, 99000)

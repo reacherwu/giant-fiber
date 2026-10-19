@@ -1,14 +1,12 @@
-//! Drosophila Functional Connectome Sub-Circuits (FlyWire / MaleCNS Prior).
+//! Drosophila looming-escape circuit model.
 //!
-//! Models biologically grounded neuronal pathways:
-//! - `lobula_plate`: Horizontal (HS) & Vertical (VS) Tangential Cells for Optic Flow & Divergence
-//! - `giant_fiber`: Looming-Sensitive Escape Circuit (Col4 -> GF -> TTMn / DLMn / PSI)
-//! - `central_complex`: Heading Ring Attractor (E-PG / P-EN compass) for Post-Reflex Stabilization
+//! - `data`: GENERATED FlyWire v783 / MANC v1.2.1 neuron IDs and synapse counts (see tools/connectome)
+//! - `giant_fiber`: LPLC2 / LC4 -> Giant Fiber (DNp01) + non-GF descending pathway, short/long escape modes
+//! - `central_complex`: simple heading integrator (not connectome-derived)
 
+pub mod data;
 pub mod giant_fiber;
-pub mod lobula_plate;
 pub mod central_complex;
 
-pub use giant_fiber::{GiantFiberCircuit, EscapeMotorOutput};
-pub use lobula_plate::{LobulaPlateCircuit, OpticFlowField};
+pub use giant_fiber::{EscapeMode, EscapeMotorOutput, GiantFiberCircuit, VpnActivity};
 pub use central_complex::{CentralComplexCircuit, CompassState};

@@ -1,0 +1,11 @@
+# Tests, benchmarks, simulation and analysis tools.
+# Versions in the comments are the ones used for the results in the README.
+-r requirements.txt
+pytest>=7          # 9.1.1
+psutil>=5.9        # 7.2.2
+pymavlink>=2.4.40  # 2.4.50  (PX4 SITL campaign + codec cross-check test)
+matplotlib>=3.7    # 3.11.2
+pandas>=2.0        # 3.0.6
+pyarrow>=14        # 26.0.0  (reads the FlyWire / MANC feather files)
+pyulog>=1.0        # 1.2.4   (reads PX4 .ulg logs)
+pillow>=10         # 13.0.0  (GIF writing)

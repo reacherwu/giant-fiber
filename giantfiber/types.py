@@ -1,7 +1,6 @@
 """Type-safe System-1 decision contracts and schemas for GiantFiber (GF-1).
 
-Enforces Pydantic validation over discrete action spaces, eliminating
-unconstrained LLM text generation and token hallucinations.
+Pydantic models for the discrete action contract returned by the engine.
 """
 
 from enum import IntEnum
@@ -31,12 +30,18 @@ class ReflexVector(BaseModel):
 
 
 class CircuitTrace(IntEnum):
-    """Originating Drosophila connectome functional sub-circuit."""
+    """Pathway that produced the decision."""
     UNKNOWN = 0
-    GIANT_FIBER_L1 = 1
-    LOBULA_PLATE_OPTIC = 2
-    CENTRAL_COMPLEX_COMPASS = 3
-    CHEMICAL_SENTINEL = 4
+    GIANT_FIBER = 1          # DNp01 spike -> short-mode escape
+    NON_GF_DESCENDING = 2    # parallel descending pathway -> long-mode escape
+    HEADING_INTEGRATOR = 3   # no escape; heading-hold output
+
+
+class EscapeMode(IntEnum):
+    """Escape mode of the current episode (von Reyn et al. 2014)."""
+    NONE = 0
+    LONG = 1
+    SHORT = 2
 
 
 class ReflexDecision(BaseModel):
@@ -44,13 +49,13 @@ class ReflexDecision(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     action: ReflexAction = Field(description="Discrete reflex action candidate")
-    confidence: float = Field(ge=0.0, le=1.0, description="Mathematically calibrated certainty P in [0.0, 1.0]")
+    confidence: float = Field(ge=0.0, le=1.0, description="Softmax confidence of the decision gate (monotone in threshold margin; not a calibrated probability)")
     vector: ReflexVector = Field(default_factory=ReflexVector, description="3-Axis flight control or joint torque")
     compute_latency_us: int = Field(ge=0, description="Microseconds of pure inference compute")
     circuit_trace: CircuitTrace = Field(default=CircuitTrace.UNKNOWN, description="Firing connectome sub-circuit")
     timestamp_us: int = Field(ge=0, description="Microsecond timestamp of evaluation")
-    triggered: bool = Field(default=False, description="True if reflex fired above threshold; False if cruise")
-    power_estimated_mw: float = Field(default=512.0, description="Estimated total board power consumption in mW")
+    triggered: bool = Field(default=False, description="True on the step an escape is initiated or upgraded")
+    escape_mode: EscapeMode = Field(default=EscapeMode.NONE, description="Escape mode of the current episode")
 
 
 class EventSpike(BaseModel):
@@ -73,9 +78,17 @@ class EventPacket(BaseModel):
 
 
 class ReflexConfig(BaseModel):
-    """Configurable hyperparameters for the GiantFiber coprocessor."""
-    confidence_threshold: float = Field(default=0.85, ge=0.5, le=1.0)
+    """Engine parameters. Defaults mirror `EngineConfig::default()` in Rust; they are modelling choices."""
+    confidence_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
     temperature: float = Field(default=1.0, ge=0.1, le=5.0)
-    looming_threshold: float = Field(default=3.0, ge=0.1, le=20.0)
+    looming_threshold: float = Field(default=0.55, gt=0.0, le=1.0, description="Giant Fiber threshold (normalised drive)")
     decay_tau_us: float = Field(default=25000.0, ge=1000.0)
-    refractory_period_us: int = Field(default=50000, ge=0)
+    refractory_period_us: int = Field(default=300000, ge=0)
+    fov_deg: float = Field(default=90.0, gt=10.0, lt=170.0)
+    gf_tau_us: float = Field(default=10000.0, ge=100.0)
+    nongf_threshold: float = Field(default=0.30, gt=0.0, le=1.0)
+    nongf_tau_us: float = Field(default=30000.0, ge=100.0)
+    lplc2_half_size_deg: float = Field(default=20.0, gt=0.0)
+    lc4_half_velocity_dps: float = Field(default=200.0, gt=0.0)
+    long_mode_window_us: float = Field(default=30000.0, ge=0.0)
+    min_edge_cells: int = Field(default=6, ge=1)

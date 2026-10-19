@@ -5,14 +5,17 @@ Integration tests for PX4-Autopilot MAVLink Bridge and SITL Evasion
 import math
 import struct
 import unittest
-from giantfiber import ReflexAction, ReflexConfig
+from giantfiber import EscapeMode, ReflexAction, ReflexDecision, ReflexVector
 from giantfiber.integrations.px4_mavlink import (
+    POSITION_TARGET_TYPEMASK_ACCEL_ONLY,
     MAVLinkV2Codec,
     MAVLinkMessage,
     PX4ReflexBridge,
     PX4BridgeConfig,
-    calculate_mavlink_crc,
+    escape_acceleration_ned,
 )
+
+from _stimuli import run_loom
 
 
 class TestPX4MAVLinkIntegration(unittest.TestCase):
@@ -63,61 +66,78 @@ class TestPX4MAVLinkIntegration(unittest.TestCase):
         self.assertEqual(bridge.total_imu_ingested, 1)
         bridge.close()
 
-    def test_evasion_override_dispatch(self):
-        """Tests that a looming trigger dispatches an immediate SET_ATTITUDE_TARGET override."""
-        config = PX4BridgeConfig(
-            reflex_config=ReflexConfig(looming_threshold=0.5, confidence_threshold=0.5)
+    def test_evasion_acceleration_setpoint(self):
+        """A looming stimulus on the left triggers an escape that streams an
+        acceleration-only SET_POSITION_TARGET_LOCAL_NED (84) pointing right."""
+        bridge = PX4ReflexBridge(PX4BridgeConfig())
+        # no connect(): packets are built but not sent
+        decisions, first = run_loom(
+            lambda t: bridge.step_eval(t, wall_time_s=t * 1e-6),
+            bridge.coprocessor.feed_raw_spikes,
+            rv_ms=10.0, offset_x=-0.1,
         )
-        bridge = PX4ReflexBridge(config)
-        bridge.connect()
+        self.assertIsNotNone(first, "loom must trigger an escape")
+        self.assertIn(first.escape_mode, (EscapeMode.SHORT, EscapeMode.LONG))
+        self.assertGreater(first.vector.x, 0.0, "object on the left -> escape to the right")
+        self.assertTrue(bridge.evasion_active(wall_time_s=first.timestamp_us * 1e-6 + 0.1))
+        self.assertFalse(bridge.evasion_active(wall_time_s=first.timestamp_us * 1e-6 + 1.0))
 
-        # Feed an accelerating, expanding looming stimulus (e.g. projectile heading towards eye center)
-        t_base = 50000
-        for step in range(12):
-            t = t_base + step * 1000
-            radius = int(2 + step * 2.5)
-            cx, cy = 32, 32
-            for angle_deg in range(0, 360, 20):
-                rad = math.radians(angle_deg)
-                px = int(cx + radius * math.cos(rad))
-                py = int(cy + radius * math.sin(rad))
-                if 0 <= px < 64 and 0 <= py < 64:
-                    bridge.feed_visual_spike(px, py, t, polarity=1)
+        pkt = bridge.evasion_packet()
+        dec = MAVLinkV2Codec.decode(pkt)
+        self.assertIsNotNone(dec)
+        self.assertEqual(dec.msgid, 84)
+        self.assertEqual(dec.fields["type_mask"], POSITION_TARGET_TYPEMASK_ACCEL_ONLY)
+        # yaw = 0 (facing north): body right is +East = +y in NED
+        afx, afy, afz = dec.fields["acc"]
+        self.assertGreater(afy, 0.0)
+        self.assertAlmostEqual(afx, 0.0, places=5)
+        mag = (afx ** 2 + afy ** 2 + afz ** 2) ** 0.5
+        last = [d for d in decisions if d.triggered][-1]  # a long episode may be upgraded to short
+        expected = (bridge.config.accel_short_mode if last.escape_mode == EscapeMode.SHORT
+                    else bridge.config.accel_long_mode)
+        self.assertAlmostEqual(mag, expected, places=3)
+        bridge.close()
 
-            decision = bridge.step_eval(t)
-            if decision.triggered:
-                break
+    def test_escape_acceleration_respects_yaw(self):
+        cfg = PX4BridgeConfig()
+        d = ReflexDecision(action=ReflexAction.ROLL_RIGHT_90, confidence=0.9,
+                           vector=ReflexVector(x=1.0, y=0.0, z=0.0), compute_latency_us=1,
+                           timestamp_us=1, triggered=True, escape_mode=EscapeMode.SHORT)
+        ax, ay, az = escape_acceleration_ned(d, math.pi / 2, cfg)  # facing east -> right is south
+        self.assertAlmostEqual(ax, -cfg.accel_short_mode, places=4)
+        self.assertAlmostEqual(ay, 0.0, places=4)
+        self.assertAlmostEqual(az, 0.0, places=4)
 
-        # Must have triggered a reflex override
-        self.assertIsNotNone(bridge.last_decision)
-        self.assertTrue(bridge.last_decision.triggered)
-        self.assertIn(
-            bridge.last_decision.action,
-            [ReflexAction.ROLL_RIGHT_90, ReflexAction.ROLL_LEFT_90, ReflexAction.PITCH_UP],
-        )
-        self.assertGreater(bridge.total_overrides_dispatched, 0)
+    def test_set_position_target_matches_pymavlink(self):
+        """Our hand-written encoder must agree with the reference pymavlink parser."""
+        try:
+            from pymavlink.dialects.v20 import common as mavlink2
+        except ImportError:
+            self.skipTest("pymavlink not installed")
+        payload = MAVLinkV2Codec.pack_set_position_target_local_ned(
+            time_boot_ms=1234, target_sys=1, target_comp=1,
+            type_mask=POSITION_TARGET_TYPEMASK_ACCEL_ONLY, acc=(0.5, -9.0, 1.25))
+        pkt = MAVLinkV2Codec.encode(MAVLinkMessage(msgid=84, sysid=1, compid=191, seq=7, payload=payload))
+        mav = mavlink2.MAVLink(None)
+        m = mav.parse_char(pkt)
+        self.assertIsNotNone(m)
+        self.assertEqual(m.get_type(), "SET_POSITION_TARGET_LOCAL_NED")
+        self.assertEqual(m.type_mask, POSITION_TARGET_TYPEMASK_ACCEL_ONLY)
+        self.assertAlmostEqual(m.afy, -9.0, places=5)
+        self.assertEqual(m.coordinate_frame, 1)  # MAV_FRAME_LOCAL_NED
 
-        # Verify the generated MAVLink packet format
-        override_packet = bridge.dispatch_evasion_override(bridge.last_decision)
-        decoded_override = MAVLinkV2Codec.decode(override_packet)
-        self.assertIsNotNone(decoded_override)
-        self.assertEqual(decoded_override.msgid, 82)  # SET_ATTITUDE_TARGET
-        self.assertIn("body_roll_rate", decoded_override.fields)
-        self.assertIn("thrust", decoded_override.fields)
-        # Body roll rate should be non-zero for roll avoidance
-        self.assertNotEqual(decoded_override.fields["body_roll_rate"], 0.0)
-        self.assertGreater(decoded_override.fields["thrust"], 0.8)
-
-        # Wire layout verification: target_sys (offset 36), target_comp (37), type_mask (38)
-        payload = decoded_override.payload
+    def test_legacy_attitude_override_packet(self):
+        """The legacy single-packet SET_ATTITUDE_TARGET is still well-formed."""
+        bridge = PX4ReflexBridge(PX4BridgeConfig())
+        d = ReflexDecision(action=ReflexAction.ROLL_RIGHT_90, confidence=0.9,
+                           vector=ReflexVector(x=1.0), compute_latency_us=1, timestamp_us=1,
+                           triggered=True, escape_mode=EscapeMode.SHORT)
+        dec = MAVLinkV2Codec.decode(bridge.dispatch_evasion_override(d))
+        self.assertEqual(dec.msgid, 82)
+        self.assertNotEqual(dec.fields["body_roll_rate"], 0.0)
+        payload = dec.payload
         self.assertEqual(len(payload), 39)
-        self.assertEqual(payload[36], 1)   # target_sys
-        self.assertEqual(payload[37], 1)   # target_comp
-        self.assertEqual(payload[38], 0x80) # ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE (0x80)
-
-        # Ensure body rate ignore bits (0, 1, 2) are NOT set!
-        self.assertEqual(payload[38] & 0b111, 0)
-
+        self.assertEqual(payload[38], 0x80)
         bridge.close()
 
     def test_mavlink_v2_zero_truncation_handling(self):

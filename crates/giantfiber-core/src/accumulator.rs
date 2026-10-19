@@ -4,16 +4,21 @@
 //! (centroid, variance, and expansion rate) without dynamic heap allocations.
 
 use crate::types::EventSpike;
+use crate::math::{expf, sqrtf};
 
 pub const SURFACE_WIDTH: usize = 64;
 pub const SURFACE_HEIGHT: usize = 64;
+/// A cell's burst counter restarts if it was silent for longer than this.
+pub const BURST_GAP_US: u64 = 4000;
 
 /// Bounded Constant-Memory Receptive Field Time Surface.
 pub struct EventAccumulator {
     /// Last spike microsecond timestamp per cell
-    last_timestamp: [[u64; SURFACE_WIDTH]; SURFACE_HEIGHT],
+    pub(crate) last_timestamp: [[u64; SURFACE_WIDTH]; SURFACE_HEIGHT],
     /// Last polarity per cell (+1 or -1)
-    polarity_surface: [[i8; SURFACE_WIDTH]; SURFACE_HEIGHT],
+    pub(crate) polarity_surface: [[i8; SURFACE_WIDTH]; SURFACE_HEIGHT],
+    /// Events received by each cell since its last quiet gap of more than `BURST_GAP_US`
+    pub(crate) burst_count: [[u8; SURFACE_WIDTH]; SURFACE_HEIGHT],
     /// Global latest timestamp
     pub current_time_us: u64,
     /// Time constant tau in microseconds for exponential decay
@@ -37,6 +42,7 @@ impl EventAccumulator {
         Self {
             last_timestamp: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
             polarity_surface: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
+            burst_count: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
             current_time_us: 0,
             tau_us: if tau_us > 0.0 { tau_us } else { 25000.0 },
             centroid_x: (SURFACE_WIDTH as f32) / 2.0,
@@ -53,6 +59,7 @@ impl EventAccumulator {
     pub fn reset(&mut self) {
         self.last_timestamp = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
         self.polarity_surface = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
+        self.burst_count = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
         self.current_time_us = 0;
         self.centroid_x = (SURFACE_WIDTH as f32) / 2.0;
         self.centroid_y = (SURFACE_HEIGHT as f32) / 2.0;
@@ -76,6 +83,12 @@ impl EventAccumulator {
         let sy = ((spike.y as usize * SURFACE_HEIGHT) / (raw_height as usize).max(1))
             .min(SURFACE_HEIGHT - 1);
 
+        let last = self.last_timestamp[sy][sx];
+        self.burst_count[sy][sx] = if last == 0 || spike.timestamp_us.saturating_sub(last) > BURST_GAP_US {
+            1
+        } else {
+            self.burst_count[sy][sx].saturating_add(1)
+        };
         self.last_timestamp[sy][sx] = spike.timestamp_us;
         self.polarity_surface[sy][sx] = if spike.polarity == 0 { -1 } else { spike.polarity };
         self.recent_event_count = self.recent_event_count.saturating_add(1);
@@ -87,7 +100,7 @@ impl EventAccumulator {
 
         let dx = (sx as f32) - self.centroid_x;
         let dy = (sy as f32) - self.centroid_y;
-        let dist = (dx * dx + dy * dy).sqrt();
+        let dist = sqrtf(dx * dx + dy * dy);
 
         self.radius = (1.0 - alpha) * self.radius + alpha * dist.max(1.0);
     }
@@ -134,7 +147,7 @@ impl EventAccumulator {
             return 0.0;
         }
         let dt = self.current_time_us.saturating_sub(last_t) as f32;
-        let decay = (-dt / self.tau_us).exp();
+        let decay = expf(-dt / self.tau_us);
         decay * (self.polarity_surface[y][x] as f32)
     }
 

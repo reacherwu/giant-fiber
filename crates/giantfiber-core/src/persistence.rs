@@ -1,15 +1,16 @@
 //! Zero-Loss Microsecond Binary Persistence for GiantFiber.
 //!
 //! Compact, fixed-size binary snapshot format with magic header `b"GF1\0"`.
-//! Guarantees sub-millisecond save/restore with 100% bit-exact state recovery.
+//! Restores the engine state bit-exactly (checked by tests); see README for measured timings.
 
 use core::mem::size_of;
 use crate::types::{EngineConfig, Vector3D};
 use crate::connectome::central_complex::NUM_WEDGES;
 
 pub const SNAPSHOT_MAGIC: [u8; 4] = *b"GF1\0";
-pub const SNAPSHOT_VERSION: u32 = 2;
+pub const SNAPSHOT_VERSION: u32 = 3;
 
+/// Fixed 280-byte layout; padding fields are explicit so no uninitialised bytes are written.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct EngineSnapshot {
@@ -19,20 +20,35 @@ pub struct EngineSnapshot {
     pub current_time_us: u64,
     pub last_fire_time_us: u64,
     pub last_imu_time_us: u64,
-    pub v_membrane: f32,
+    pub v_gf: [f32; 2],
+    pub v_nongf: [f32; 2],
+    pub escape_mode: u32,
+    pub _pad0: u32,
+    pub episode_start_us: u64,
+    pub nongf_onset_us: u64,
+    pub last_step_us: u64,
+    pub latched_roll: f32,
+    pub latched_pitch: f32,
     pub expansion_rate: f32,
     pub centroid_x: f32,
     pub centroid_y: f32,
     pub radius: f32,
     pub prev_radius: f32,
+    pub _pad1: u32,
     pub prev_radius_time_us: u64,
     pub heading_rad: f32,
     pub target_heading_rad: f32,
     pub correction_torque: Vector3D,
     pub wedges: [f32; NUM_WEDGES],
+    pub _pad2: u32,
     pub config: EngineConfig,
     pub checksum: u32,
+    pub _pad3: u32,
 }
+
+// All padding is explicit (and zeroed), so the serialized bytes and the checksum are deterministic.
+const _: () = assert!(size_of::<EngineSnapshot>() == 280);
+const _: () = assert!(size_of::<EngineConfig>() == 56);
 
 impl EngineSnapshot {
     pub fn compute_checksum(&self) -> u32 {

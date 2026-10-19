@@ -1,19 +1,23 @@
 [package]
 name = "giantfiber-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["GiantFiber Team <research@giantfiber.ai>"]
-description = "High-performance Sub-5ms Drosophila Connectome Bio-Reflex Coprocessor Core"
+description = "Event-camera looming-escape reflex core modelled on the Drosophila LPLC2/LC4 -> Giant Fiber circuit (FlyWire v783 synapse counts)"
 license = "Apache-2.0"
+repository = "https://github.com/reacherwu/giant-fiber"
+rust-version = "1.77"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Zero external dependencies for maximum portability, zero-bloat, and sub-millisecond execution
+# Only needed for float math on no_std targets.
+libm = { version = "0.2", optional = true }
 
 [features]
 default = ["std"]
+# std: C ABI exports (Box-allocated engine handle) + wall-clock compute timing.
 std = []
-
-[dev-dependencies]
+# Build without std: `cargo build --no-default-features --features libm --target thumbv7em-none-eabihf`
+libm = ["dep:libm"]

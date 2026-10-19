@@ -1,10 +1,12 @@
-//! Central Complex (CX) Heading Ring Attractor Circuit.
+//! Heading integrator loosely inspired by the Drosophila central-complex compass (E-PG / P-EN).
 //!
-//! Emulates the Drosophila compass system (E-PG & P-EN neurons in Ellipsoid Body / Protocerebral Bridge).
-//! Maintains continuous heading orientation and provides post-reflex attitude stabilization.
+//! This is NOT derived from connectome data: it is a 16-wedge population code that integrates the
+//! IMU yaw rate and emits a proportional heading-correction term. It is kept as a simple
+//! post-escape heading hold signal.
 
 use core::f32::consts::PI;
 use crate::types::Vector3D;
+use crate::math::{atan2f, cosf, expf, rem_euclidf, sinf};
 
 pub const NUM_WEDGES: usize = 16;
 
@@ -40,6 +42,12 @@ pub struct CentralComplexCircuit {
     pub target_heading_rad: f32,
 }
 
+impl Default for CentralComplexCircuit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CentralComplexCircuit {
     pub fn new() -> Self {
         let mut s = Self {
@@ -65,7 +73,7 @@ impl CentralComplexCircuit {
             let diff = normalize_angle(wedge_angle - theta_rad);
             // Gaussian profile: exp(-diff^2 / (2 * sigma^2))
             let sigma = 0.5f32;
-            self.state.wedges[i] = (-diff * diff / (2.0 * sigma * sigma)).exp();
+            self.state.wedges[i] = expf(-diff * diff / (2.0 * sigma * sigma));
         }
         self.decode_heading();
     }
@@ -100,14 +108,14 @@ impl CentralComplexCircuit {
         for i in 0..NUM_WEDGES {
             let angle = -PI + (i as f32 + 0.5) * step;
             let w = self.state.wedges[i];
-            sin_sum += w * angle.sin();
-            cos_sum += w * angle.cos();
+            sin_sum += w * sinf(angle);
+            cos_sum += w * cosf(angle);
             if w > max_val {
                 max_val = w;
             }
         }
 
-        self.state.heading_rad = sin_sum.atan2(cos_sum);
+        self.state.heading_rad = atan2f(sin_sum, cos_sum);
         self.state.bump_amplitude = max_val.min(1.0);
     }
 }
@@ -118,7 +126,7 @@ pub fn normalize_angle(a: f32) -> f32 {
         return 0.0;
     }
     let two_pi = 2.0 * PI;
-    let wrapped = (a + PI).rem_euclid(two_pi) - PI;
+    let wrapped = rem_euclidf(a + PI, two_pi) - PI;
     if wrapped <= -PI {
         PI
     } else {

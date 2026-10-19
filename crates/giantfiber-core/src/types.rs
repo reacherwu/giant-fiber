@@ -114,13 +114,15 @@ pub struct ReflexOutput {
     pub vector: Vector3D,
     /// Pure computation latency in microseconds (us)
     pub compute_latency_us: u32,
-    /// Drosophila sub-circuit that fired (1: GiantFiber, 2: LobulaPlate, 3: CentralComplex)
+    /// Pathway that produced the output (1: Giant Fiber / DNp01, 2: non-GF descending pathway, 3: heading integrator)
     pub circuit_id: u32,
     /// Microsecond timestamp of decision
     pub timestamp_us: u64,
-    /// 1 if reflex triggered above threshold, 0 if cruise fallback
+    /// 1 on the evaluation step where an escape is initiated (long mode) or upgraded (short mode)
     pub triggered: u8,
-    pub _pad: [u8; 7],
+    /// Escape mode of the current episode: 0 none, 1 long mode (non-GF pathway), 2 short mode (Giant Fiber)
+    pub escape_mode: u8,
+    pub _pad: [u8; 6],
 }
 
 impl Default for ReflexOutput {
@@ -133,25 +135,42 @@ impl Default for ReflexOutput {
             circuit_id: 0,
             timestamp_us: 0,
             triggered: 0,
-            _pad: [0; 7],
+            escape_mode: 0,
+            _pad: [0; 6],
         }
     }
 }
 
-/// Coprocessor Configuration Parameters.
+/// Engine configuration. Unless stated otherwise these are modelling parameters, not measured biology.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EngineConfig {
-    /// Minimum calibrated confidence to trigger reflex action (default 0.85)
+    /// Minimum softmax confidence for the decision gate to report an escape (default 0.85)
     pub confidence_threshold: f32,
-    /// Temperature for softmax scaling calibration (default 1.0)
+    /// Softmax temperature of the decision gate (default 1.0)
     pub temperature: f32,
-    /// Looming expansion rate threshold (r/v ratio proxy)
+    /// Giant Fiber (DNp01) firing threshold, in units of normalised synaptic drive [0, 1] (default 0.55)
     pub looming_threshold: f32,
-    /// Exponential decay constant for time surface in microseconds (e.g. 25000 us)
+    /// Time-surface decay constant in microseconds (default 25000)
     pub decay_tau_us: f32,
-    /// Refractory period in microseconds after an escape reflex (e.g. 50000 us = 50ms)
+    /// Refractory period after an escape episode, microseconds (default 300000)
     pub refractory_period_us: u64,
+    /// Horizontal field of view of the event camera in degrees (default 90)
+    pub fov_deg: f32,
+    /// Giant Fiber membrane time constant, microseconds (default 10000)
+    pub gf_tau_us: f32,
+    /// Non-GF descending pathway threshold; lower than the GF threshold (von Reyn et al. 2014) (default 0.30)
+    pub nongf_threshold: f32,
+    /// Non-GF pathway time constant, microseconds (default 30000)
+    pub nongf_tau_us: f32,
+    /// LPLC2 half-activation angular size in degrees (default 20)
+    pub lplc2_half_size_deg: f32,
+    /// LC4 half-activation angular velocity in degrees per second (default 200)
+    pub lc4_half_velocity_dps: f32,
+    /// Window after non-GF onset in which a GF spike still converts the escape to short mode, microseconds (default 30000)
+    pub long_mode_window_us: f32,
+    /// Minimum number of recently active time-surface cells needed to estimate the stimulus (default 6)
+    pub min_edge_cells: u32,
 }
 
 impl Default for EngineConfig {
@@ -159,9 +178,17 @@ impl Default for EngineConfig {
         Self {
             confidence_threshold: 0.85,
             temperature: 1.0,
-            looming_threshold: 3.0,
+            looming_threshold: 0.55,
             decay_tau_us: 25000.0,
-            refractory_period_us: 50000,
+            refractory_period_us: 300_000,
+            fov_deg: 90.0,
+            gf_tau_us: 10_000.0,
+            nongf_threshold: 0.30,
+            nongf_tau_us: 30_000.0,
+            lplc2_half_size_deg: 20.0,
+            lc4_half_velocity_dps: 200.0,
+            long_mode_window_us: 30_000.0,
+            min_edge_cells: 6,
         }
     }
 }

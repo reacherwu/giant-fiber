@@ -1,6 +1,6 @@
 """Low-overhead C-ABI ctypes bindings for libgiantfiber_core.
 
-Connects the zero-bloat Rust microsecond engine to Python without PyTorch/NumPy heap overhead.
+Thin ctypes wrapper over the Rust C ABI (no NumPy/PyTorch dependency).
 """
 
 import ctypes
@@ -51,7 +51,8 @@ class C_ReflexOutput(Structure):
         ("circuit_id", c_uint32),
         ("timestamp_us", c_uint64),
         ("triggered", c_uint8),
-        ("_pad", c_uint8 * 7),
+        ("escape_mode", c_uint8),
+        ("_pad", c_uint8 * 6),
     ]
 
 
@@ -62,11 +63,42 @@ class C_EngineConfig(Structure):
         ("looming_threshold", c_float),
         ("decay_tau_us", c_float),
         ("refractory_period_us", c_uint64),
+        ("fov_deg", c_float),
+        ("gf_tau_us", c_float),
+        ("nongf_threshold", c_float),
+        ("nongf_tau_us", c_float),
+        ("lplc2_half_size_deg", c_float),
+        ("lc4_half_velocity_dps", c_float),
+        ("long_mode_window_us", c_float),
+        ("min_edge_cells", c_uint32),
+    ]
+
+
+class C_GfDebugState(Structure):
+    _fields_ = [
+        ("theta_deg", c_float),
+        ("theta_dot_dps", c_float),
+        ("centroid_x", c_float),
+        ("centroid_y", c_float),
+        ("left_fraction", c_float),
+        ("radial_cv", c_float),
+        ("lplc2", c_float * 2),
+        ("lc4", c_float * 2),
+        ("v_gf", c_float * 2),
+        ("v_nongf", c_float * 2),
+        ("edge_cells", c_uint32),
+        ("valid", c_uint32),
+        ("escape_mode", c_uint32),
+        ("_pad", c_uint32),
+        ("last_gf_spike_us", c_uint64),
     ]
 
 
 def _find_library() -> str:
     """Locate libgiantfiber_core compiled dynamic library."""
+    env_path = os.environ.get("GIANTFIBER_LIB")
+    if env_path:
+        return env_path
     pkg_dir = Path(__file__).parent.resolve()
     repo_root = pkg_dir.parent.resolve()
 
@@ -134,3 +166,18 @@ class GiantFiberCoreBinding:
         # gf_restore_snapshot(engine, buffer, buf_len) -> i32
         self.lib.gf_restore_snapshot.argtypes = [c_void_p, POINTER(c_uint8), c_size_t]
         self.lib.gf_restore_snapshot.restype = c_int32
+
+        self.lib.gf_get_debug_state.argtypes = [c_void_p, POINTER(C_GfDebugState)]
+        self.lib.gf_get_debug_state.restype = c_int32
+
+        # gf_canfd_encode(output, sequence, timestamp_ms, out[24]) -> i32
+        self.lib.gf_canfd_encode.argtypes = [POINTER(C_ReflexOutput), c_uint16, c_uint32, POINTER(c_uint8)]
+        self.lib.gf_canfd_encode.restype = c_int32
+
+    def canfd_encode(self, output: "C_ReflexOutput", sequence: int, timestamp_ms: int) -> bytes:
+        """24-byte CAN-FD reflex frame built by the Rust (no_std) encoder."""
+        buf = (c_uint8 * 24)()
+        n = self.lib.gf_canfd_encode(ctypes.byref(output), sequence & 0xFFFF, timestamp_ms & 0xFFFFFFFF, buf)
+        if n != 24:
+            raise RuntimeError("gf_canfd_encode failed")
+        return bytes(buf)

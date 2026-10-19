@@ -1,26 +1,25 @@
-"""GiantFiber (GF-1): Sub-5ms, Sub-1W Bio-Reflex Coprocessor for Autonomous Machines.
-
-Powered by Drosophila Connectome (FlyWire/MaleCNS) and Calibrated Discrete Decision Theory.
-"""
+"""GiantFiber (GF-1): event-camera looming-escape reflex modelled on the Drosophila Giant Fiber circuit."""
 
 from .types import (
     ReflexAction,
     ReflexVector,
     ReflexDecision,
     CircuitTrace,
+    EscapeMode,
     EventSpike,
     EventPacket,
     ReflexConfig,
 )
 from .engine import GiantFiberCoprocessor
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "GiantFiberCoprocessor",
     "ReflexAction",
     "ReflexVector",
     "ReflexDecision",
     "CircuitTrace",
+    "EscapeMode",
     "EventSpike",
     "EventPacket",
     "ReflexConfig",

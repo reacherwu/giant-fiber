@@ -1,9 +1,11 @@
-//! Jev-Style System-1 Discrete Logit Calibration & Gatekeeper.
+//! Discrete decision gate (Jev-style System-1 contract).
 //!
-//! Replaces hallucinated text generation with temperature-scaled, statistically calibrated
-//! probability evaluation over finite discrete action space.
+//! Turns the escape circuit output into one of a fixed set of discrete actions with a softmax
+//! confidence. The confidence is a monotone function of how far the winning pathway exceeded its
+//! threshold; it is NOT a calibrated probability (no calibration data exists yet).
 
 use crate::types::{ReflexAction, Vector3D, ReflexOutput, EngineConfig};
+use crate::math::expf;
 use crate::connectome::giant_fiber::EscapeMotorOutput;
 use crate::connectome::central_complex::CompassState;
 
@@ -40,13 +42,12 @@ impl DecisionCalibrator {
         // Cruise is default baseline
         logits[ReflexAction::Cruise as usize] = 0.5;
 
-        if escape.gf_fired {
-            // Assign calibrated logit proportional to genuine supra-threshold depolarization
+        if escape.initiated {
             let act_idx = escape.recommended_action as usize;
             if act_idx < NUM_ACTIONS {
-                logits[act_idx] = escape.raw_logit;
-                // Lower baseline cruise logit proportionally to threat strength
-                logits[ReflexAction::Cruise as usize] = (0.5 - escape.raw_logit).clamp(-5.0, 0.5);
+                // Threshold crossing alone gives logit 2.5 vs 0.5 for cruise; margin adds to it
+                logits[act_idx] = 2.5 + escape.raw_logit.clamp(0.0, 10.0);
+                logits[ReflexAction::Cruise as usize] = 0.5 - escape.raw_logit.clamp(0.0, 5.0);
             }
         }
 
@@ -64,17 +65,17 @@ impl DecisionCalibrator {
         let mut sum_exp = 0.0f32;
         let mut probs = [0.0f32; NUM_ACTIONS];
         for i in 0..NUM_ACTIONS {
-            let exp_val = (scaled[i] - max_scaled).exp();
+            let exp_val = expf(scaled[i] - max_scaled);
             probs[i] = exp_val;
             sum_exp += exp_val;
         }
 
         let mut best_action_idx = 0;
         let mut best_prob = 0.0f32;
-        for i in 0..NUM_ACTIONS {
-            probs[i] /= sum_exp;
-            if probs[i] > best_prob {
-                best_prob = probs[i];
+        for (i, p) in probs.iter_mut().enumerate() {
+            *p /= sum_exp;
+            if *p > best_prob {
+                best_prob = *p;
                 best_action_idx = i;
             }
         }
@@ -83,7 +84,7 @@ impl DecisionCalibrator {
 
         // System-1 Gatekeeper Decision Contract:
         // Only trigger non-cruise escape maneuver if confidence >= threshold
-        if escape.gf_fired && best_prob >= thresh && best_action != ReflexAction::Cruise {
+        if escape.initiated && best_prob >= thresh && best_action != ReflexAction::Cruise {
             ReflexOutput {
                 action: best_action as u32,
                 confidence: best_prob,
@@ -93,10 +94,11 @@ impl DecisionCalibrator {
                     z: escape.thrust_magnitude,
                 },
                 compute_latency_us: latency_us,
-                circuit_id: 1, // GiantFiber_L1
+                circuit_id: if escape.mode == crate::connectome::EscapeMode::Short { 1 } else { 2 },
                 timestamp_us,
                 triggered: 1,
-                _pad: [0; 7],
+                escape_mode: escape.mode as u8,
+                _pad: [0; 6],
             }
         } else {
             // Safe fallback: Cruise with heading stabilization torque from Central Complex
@@ -105,10 +107,11 @@ impl DecisionCalibrator {
                 confidence: probs[ReflexAction::Cruise as usize],
                 vector: compass.correction_torque,
                 compute_latency_us: latency_us,
-                circuit_id: 3, // CentralComplex_Compass
+                circuit_id: 3, // heading integrator
                 timestamp_us,
                 triggered: 0,
-                _pad: [0; 7],
+                escape_mode: escape.mode as u8,
+                _pad: [0; 6],
             }
         }
     }

@@ -1,0 +1,9 @@
+side,pre_type,target,target_root_id,n_pre_neurons,syn_count,target_total_input_syn
+left,LPLC2,DNp01,720575940622838154,94,458,4327
+left,LPLC2,nonGF_DN,0,108,3205,0
+left,LC4,DNp01,720575940622838154,54,374,4327
+left,LC4,nonGF_DN,0,54,2863,0
+right,LPLC2,DNp01,720575940632499757,95,622,5147
+right,LPLC2,nonGF_DN,0,102,3134,0
+right,LC4,DNp01,720575940632499757,50,431,5147
+right,LC4,nonGF_DN,0,50,2211,0

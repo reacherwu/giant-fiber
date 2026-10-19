@@ -1,0 +1,18 @@
+pre_body_id,pre_type,pre_side,post_body_id,post_type,post_side,syn_count
+10002,DNp01,left,11446,PSI,left,65
+10002,DNp01,left,11654,PSI,right,28
+10000,DNp01,right,11446,PSI,left,16
+10000,DNp01,right,11654,PSI,right,47
+10002,DNp01,left,10068,TTMn,left,135
+10002,DNp01,left,10110,TTMn,right,4
+10000,DNp01,right,10110,TTMn,right,146
+11446,PSI,left,10074,"DLMn a, b",left,59
+11654,PSI,right,10589,"DLMn a, b",right,120
+11446,PSI,left,10361,DLMn c-f,right,129
+11446,PSI,left,162240,DLMn c-f,right,105
+11446,PSI,left,169914,DLMn c-f,right,64
+11446,PSI,left,18309,DLMn c-f,right,31
+11654,PSI,right,10014,DLMn c-f,left,178
+11654,PSI,right,10088,DLMn c-f,left,123
+11654,PSI,right,10592,DLMn c-f,left,206
+11654,PSI,right,10892,DLMn c-f,left,96

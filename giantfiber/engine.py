@@ -6,27 +6,21 @@ Provides an intuitive, zero-copy, type-safe interface for robotics and autonomou
 from typing import Optional, List, Tuple
 import ctypes
 from .binding import (
-    GiantFiberCoreBinding, C_EngineConfig, C_EventSpike, C_ImuData, C_ReflexOutput
+    GiantFiberCoreBinding, C_EngineConfig, C_EventSpike, C_ImuData, C_ReflexOutput, C_GfDebugState
 )
 from .types import (
-    ReflexConfig, ReflexDecision, ReflexAction, ReflexVector, CircuitTrace, EventPacket, EventSpike
+    ReflexConfig, ReflexDecision, ReflexAction, ReflexVector, CircuitTrace, EventPacket, EventSpike, EscapeMode
 )
 
 
 class GiantFiberCoprocessor:
-    """Sub-5ms, Sub-1W Drosophila Connectome Bio-Reflex Coprocessor."""
+    """Python handle to the Rust looming-escape engine."""
 
     def __init__(self, config: Optional[ReflexConfig] = None, lib_path: Optional[str] = None):
         self.config = config or ReflexConfig()
         self._binding = GiantFiberCoreBinding(lib_path)
 
-        c_cfg = C_EngineConfig(
-            confidence_threshold=self.config.confidence_threshold,
-            temperature=self.config.temperature,
-            looming_threshold=self.config.looming_threshold,
-            decay_tau_us=self.config.decay_tau_us,
-            refractory_period_us=self.config.refractory_period_us,
-        )
+        c_cfg = C_EngineConfig(**{name: getattr(self.config, name) for name, _ in C_EngineConfig._fields_})
         self._engine_ptr = self._binding.lib.gf_engine_new(ctypes.byref(c_cfg))
         if not self._engine_ptr:
             raise RuntimeError("Failed to allocate native GiantFiberEngine")
@@ -104,7 +98,7 @@ class GiantFiberCoprocessor:
         accel: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         timestamp_us: int = 0,
     ):
-        """Update biomimetic Halteres / IMU state for heading stabilization."""
+        """Feed an IMU sample (yaw rate drives the heading integrator)."""
         imu = C_ImuData(
             timestamp_us=timestamp_us,
             gyro_x=gyro[0],
@@ -117,7 +111,7 @@ class GiantFiberCoprocessor:
         self._binding.lib.gf_update_imu(self._engine_ptr, ctypes.byref(imu))
 
     def step_eval(self, now_us: int = 0) -> ReflexDecision:
-        """Execute sub-millisecond System-1 connectome evaluation and return type-safe contract."""
+        """Run one evaluation step and return the discrete decision."""
         out = C_ReflexOutput()
         res = self._binding.lib.gf_step_eval(self._engine_ptr, now_us, ctypes.byref(out))
         if res != 0:
@@ -127,9 +121,6 @@ class GiantFiberCoprocessor:
         circuit_enum = CircuitTrace(out.circuit_id) if out.circuit_id in CircuitTrace._value2member_map_ else CircuitTrace.UNKNOWN
         vector = ReflexVector(x=out.vector.x, y=out.vector.y, z=out.vector.z)
 
-        # Board power estimation: ~512mW nominal operation
-        power_est = 512.0 if not out.triggered else 620.0
-
         return ReflexDecision(
             action=action_enum,
             confidence=round(float(out.confidence), 4),
@@ -138,11 +129,11 @@ class GiantFiberCoprocessor:
             circuit_trace=circuit_enum,
             timestamp_us=int(out.timestamp_us),
             triggered=bool(out.triggered),
-            power_estimated_mw=power_est,
+            escape_mode=EscapeMode(out.escape_mode),
         )
 
     def save_snapshot(self) -> bytes:
-        """Create a bit-exact binary snapshot of the entire coprocessor state (<50us)."""
+        """Serialize the engine state (scalar state; the time surface is not included)."""
         snap_size = self._binding.lib.gf_get_snapshot_size()
         buf = (ctypes.c_uint8 * snap_size)()
         written = self._binding.lib.gf_save_snapshot(self._engine_ptr, buf, snap_size)
@@ -151,9 +142,23 @@ class GiantFiberCoprocessor:
         return bytes(buf[:written])
 
     def restore_snapshot(self, data: bytes):
-        """Restore coprocessor state from binary snapshot with Adler checksum validation (<50us)."""
+        """Restore engine state from a snapshot (Adler-32 checked)."""
         buf_len = len(data)
         buf = (ctypes.c_uint8 * buf_len)(*data)
         res = self._binding.lib.gf_restore_snapshot(self._engine_ptr, buf, buf_len)
         if res != 0:
             raise RuntimeError(f"Failed to restore engine snapshot: code {res}")
+
+    def debug_state(self) -> dict:
+        """Internal looming estimate, VPN activity and membrane states (for analysis/plots)."""
+        st = C_GfDebugState()
+        self._binding.lib.gf_get_debug_state(self._engine_ptr, ctypes.byref(st))
+        return {
+            "theta_deg": st.theta_deg, "theta_dot_dps": st.theta_dot_dps,
+            "centroid_x": st.centroid_x, "centroid_y": st.centroid_y,
+            "left_fraction": st.left_fraction, "radial_cv": st.radial_cv,
+            "lplc2": tuple(st.lplc2), "lc4": tuple(st.lc4),
+            "v_gf": tuple(st.v_gf), "v_nongf": tuple(st.v_nongf),
+            "edge_cells": st.edge_cells, "valid": bool(st.valid),
+            "escape_mode": st.escape_mode, "last_gf_spike_us": st.last_gf_spike_us,
+        }
