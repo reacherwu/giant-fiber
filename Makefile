@@ -1,4 +1,4 @@
-.PHONY: all build test test-rust test-python bench demo nostd clippy validate connectome sitl clean
+.PHONY: all build test test-rust test-python bench demo nostd clippy validate connectome sitl rtl clean
 
 all: build
 
@@ -37,6 +37,10 @@ connectome:
 # Full PX4 SITL campaign (clones/builds PX4 v1.15.4 on first run; ~2 h)
 sitl: build
 	bash sim/px4_sitl/run_all.sh
+
+# RTL prototype check (needs iverilog)
+rtl: build
+	python3 rtl/check_rtl.py --json rtl/rtl_check.json
 
 clean:
 	cargo clean
