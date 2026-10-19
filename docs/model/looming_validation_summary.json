@@ -1,0 +1,69 @@
+{
+  "looming": [
+    {
+      "rv_ms": 5.0,
+      "n": 5,
+      "gf_theta_mean": 26.448,
+      "gf_t_before_contact_mean": 16.85,
+      "gf_short_first": 0,
+      "long_then_short": 5,
+      "long_only": 0,
+      "none": 0
+    },
+    {
+      "rv_ms": 10.0,
+      "n": 5,
+      "gf_theta_mean": 24.604000000000003,
+      "gf_t_before_contact_mean": 36.9,
+      "gf_short_first": 0,
+      "long_then_short": 5,
+      "long_only": 0,
+      "none": 0
+    },
+    {
+      "rv_ms": 20.0,
+      "n": 5,
+      "gf_theta_mean": 24.982000000000003,
+      "gf_t_before_contact_mean": 72.4,
+      "gf_short_first": 0,
+      "long_then_short": 5,
+      "long_only": 0,
+      "none": 0
+    },
+    {
+      "rv_ms": 40.0,
+      "n": 5,
+      "gf_theta_mean": 26.862000000000002,
+      "gf_t_before_contact_mean": 132.4,
+      "gf_short_first": 0,
+      "long_then_short": 3,
+      "long_only": 2,
+      "none": 0
+    },
+    {
+      "rv_ms": 80.0,
+      "n": 5,
+      "gf_theta_mean": 32.757999999999996,
+      "gf_t_before_contact_mean": 204.2,
+      "gf_short_first": 0,
+      "long_then_short": 0,
+      "long_only": 5,
+      "none": 0
+    }
+  ],
+  "controls": {
+    "recede": 0,
+    "lateral": 0,
+    "static": 0,
+    "noise_0.1Hz_per_px": 0,
+    "noise_0.3Hz_per_px": 0,
+    "noise_1.0Hz_per_px": 0,
+    "noise_3.0Hz_per_px": 0
+  },
+  "fit": {
+    "slope": 2.4698924731182785,
+    "intercept_ms": 15.983333333333311,
+    "r": 0.9800013222017395,
+    "implied_threshold_deg": 44.08367994228777
+  }
+}
