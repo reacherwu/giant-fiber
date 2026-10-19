@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: thumbv7em-none-eabihf
+      - name: cargo test
+        run: cargo test --workspace
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: no_std build (thumbv7em-none-eabihf)
+        run: cargo build -p giantfiber-core --no-default-features --features libm --target thumbv7em-none-eabihf --release
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build native library
+        run: cargo build --release
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Try to create vcan0 for the SocketCAN test (best effort)
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y linux-modules-extra-$(uname -r) || true
+          sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set vcan0 mtu 72 up && ip link show vcan0
+      - name: Python tests
+        run: python -m pytest tests -v
+      - name: Benchmark smoke run
+        run: python benchmarks/run_benchmarks.py --quick --json bench-smoke.json
+      - name: Example
+        run: python examples/looming_demo.py --rv-ms 20 | tail -5
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-smoke
+          path: bench-smoke.json
