@@ -1,0 +1,101 @@
+{
+  "checks": [
+    {
+      "name": "native step_eval p99",
+      "value": 5.88,
+      "op": "<",
+      "target": 1000,
+      "unit": "us",
+      "passed": true
+    },
+    {
+      "name": "native triggers per loom",
+      "value": 2.0,
+      "op": ">",
+      "target": 0,
+      "unit": "",
+      "passed": true
+    },
+    {
+      "name": "FFI round trip p99",
+      "value": 95.81168000000021,
+      "op": "<",
+      "target": 2000,
+      "unit": "us",
+      "passed": true
+    },
+    {
+      "name": "C ABI ingestion",
+      "value": 31.459067621579326,
+      "op": ">",
+      "target": 1.0,
+      "unit": "M events/s",
+      "passed": true
+    },
+    {
+      "name": "MAVLink setpoint encode",
+      "value": 11.73088000032294,
+      "op": "<",
+      "target": 100,
+      "unit": "us",
+      "passed": true
+    },
+    {
+      "name": "noise-only triggers",
+      "value": 0,
+      "op": "==",
+      "target": 0,
+      "unit": "",
+      "passed": true
+    }
+  ],
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "cores": 8,
+    "os": "Linux-6.12.94+-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
+  },
+  "quick": false,
+  "native": {
+    "steps": 56100,
+    "events_per_loom": 98604,
+    "step_eval_ns": {
+      "mean": 1719,
+      "p50": 1515,
+      "p99": 5880,
+      "max": 34134
+    },
+    "ingest_events_per_s": 141228923,
+    "snapshot_bytes": 280,
+    "snapshot_save_ns": 798,
+    "snapshot_restore_ns": 757,
+    "engine_struct_bytes": 41368,
+    "triggers_per_loom": 2.0
+  },
+  "ffi_roundtrip_us": {
+    "mean": 11.371879078694818,
+    "p50": 7.725,
+    "p99": 95.81168000000021,
+    "max": 347.141,
+    "n": 2605
+  },
+  "ffi_reported_compute_us": {
+    "mean": 1.6214971209213052,
+    "p50": 1.0,
+    "p99": 13.0,
+    "max": 24.0,
+    "n": 2605
+  },
+  "ingest_events_per_s": 31459067.621579327,
+  "protocol": {
+    "mavlink84_encode_us": 11.73088000032294,
+    "canfd_encode_decode_us": 28.31091770021885,
+    "evt2_decode_events_per_s": 1591230.6028409386
+  },
+  "noise": {
+    "seconds": 60,
+    "rate_hz_per_px": 1.0,
+    "triggers": 0
+  }
+}

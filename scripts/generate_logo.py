@@ -161,7 +161,7 @@ def generate_header_logo():
     draw.text((text_x + 360, 50), "GF-1", fill=(0, 229, 255, 255))
 
     # Subtitle
-    draw.text((text_x, 105), "Sub-5ms, Sub-1W Bio-Reflex Coprocessor for Autonomous Machines", fill=(203, 213, 225, 255))
+    draw.text((text_x, 105), "Event-camera looming-escape reflex modelled on the Drosophila Giant Fiber", fill=(203, 213, 225, 255))
     draw.text((text_x, 138), "Drosophila Connectome Prior (FlyWire / MaleCNS) × Jev System-1 Calibrated Decision", fill=(0, 245, 212, 220))
     draw.text((text_x, 170), "Native PX4-Autopilot MAVLink v2 Preemption | Pure Rust Zero-GC Core", fill=(148, 163, 184, 255))
 

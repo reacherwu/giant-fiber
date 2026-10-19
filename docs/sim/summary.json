@@ -1,0 +1,441 @@
+{
+  "no reflex (baseline)": {
+    "arm": "baseline",
+    "config": "drone",
+    "n_trials": 72,
+    "n_unsettled": 37,
+    "hits": 54,
+    "hit_rate": 0.75,
+    "hit_rate_ci95": [
+      0.6391,
+      0.8356
+    ],
+    "evasion_success_rate": 0.25,
+    "evasion_success_ci95": [
+      0.1644,
+      0.3609
+    ],
+    "detection_rate": 0.8472,
+    "first_mode_short": 24,
+    "first_mode_long": 37,
+    "reached_short": 52,
+    "min_dist_m": {
+      "n": 72,
+      "mean": 0.293,
+      "median": 0.222,
+      "p05": 0.069,
+      "p95": 0.754,
+      "min": 0.015,
+      "max": 0.913
+    },
+    "clearance_m": {
+      "n": 72,
+      "mean": -0.107,
+      "median": -0.178,
+      "p05": -0.331,
+      "p95": 0.354,
+      "min": -0.385,
+      "max": 0.513
+    },
+    "trigger_ttc_ms": {
+      "n": 61,
+      "mean": 170.915,
+      "median": 145.8,
+      "p05": 83.8,
+      "p95": 381.8,
+      "min": 80.2,
+      "max": 439.8
+    },
+    "trigger_dist_m": {
+      "n": 61,
+      "mean": 1.907,
+      "median": 1.81,
+      "p05": 1.32,
+      "p95": 2.691,
+      "min": 1.137,
+      "max": 3.039
+    },
+    "compute_latency_us": {
+      "n": 61,
+      "mean": 6.295,
+      "median": 6.0,
+      "p05": 5.0,
+      "p95": 8.0,
+      "min": 5.0,
+      "max": 12.0
+    },
+    "detect_to_send_us": {
+      "n": 61,
+      "mean": 52.082,
+      "median": 48.6,
+      "p05": 33.9,
+      "p95": 77.6,
+      "min": 27.4,
+      "max": 98.8
+    },
+    "response_latency_ms": {
+      "n": 0
+    },
+    "hits_given_triggered": 54,
+    "n_triggered": 61,
+    "hits_given_not_triggered": 0
+  },
+  "reflex (drone preset)": {
+    "arm": "reflex",
+    "config": "drone",
+    "n_trials": 108,
+    "n_unsettled": 40,
+    "hits": 85,
+    "hit_rate": 0.787,
+    "hit_rate_ci95": [
+      0.7007,
+      0.8537
+    ],
+    "evasion_success_rate": 0.213,
+    "evasion_success_ci95": [
+      0.1463,
+      0.2993
+    ],
+    "detection_rate": 0.9167,
+    "first_mode_short": 37,
+    "first_mode_long": 62,
+    "reached_short": 84,
+    "min_dist_m": {
+      "n": 108,
+      "mean": 0.289,
+      "median": 0.254,
+      "p05": 0.053,
+      "p95": 0.697,
+      "min": 0.016,
+      "max": 1.038
+    },
+    "clearance_m": {
+      "n": 108,
+      "mean": -0.111,
+      "median": -0.146,
+      "p05": -0.347,
+      "p95": 0.297,
+      "min": -0.384,
+      "max": 0.638
+    },
+    "trigger_ttc_ms": {
+      "n": 99,
+      "mean": 189.274,
+      "median": 167.6,
+      "p05": 95.69,
+      "p95": 350.84,
+      "min": 85.3,
+      "max": 448.8
+    },
+    "trigger_dist_m": {
+      "n": 99,
+      "mean": 2.108,
+      "median": 2.105,
+      "p05": 1.396,
+      "p95": 2.796,
+      "min": 1.196,
+      "max": 3.217
+    },
+    "compute_latency_us": {
+      "n": 99,
+      "mean": 6.838,
+      "median": 6.0,
+      "p05": 5.0,
+      "p95": 9.0,
+      "min": 5.0,
+      "max": 37.0
+    },
+    "detect_to_send_us": {
+      "n": 99,
+      "mean": 195.692,
+      "median": 182.7,
+      "p05": 138.9,
+      "p95": 250.69,
+      "min": 130.6,
+      "max": 923.3
+    },
+    "response_latency_ms": {
+      "n": 99,
+      "mean": 187.04,
+      "median": 186.3,
+      "p05": 167.23,
+      "p95": 216.13,
+      "min": 99.5,
+      "max": 226.3
+    },
+    "hits_given_triggered": 84,
+    "n_triggered": 99,
+    "hits_given_not_triggered": 1
+  },
+  "reflex (fly preset)": {
+    "arm": "reflex",
+    "config": "fly",
+    "n_trials": 36,
+    "n_unsettled": 21,
+    "hits": 25,
+    "hit_rate": 0.6944,
+    "hit_rate_ci95": [
+      0.5314,
+      0.82
+    ],
+    "evasion_success_rate": 0.3056,
+    "evasion_success_ci95": [
+      0.18,
+      0.4686
+    ],
+    "detection_rate": 0.5556,
+    "first_mode_short": 1,
+    "first_mode_long": 19,
+    "reached_short": 19,
+    "min_dist_m": {
+      "n": 36,
+      "mean": 0.255,
+      "median": 0.172,
+      "p05": 0.039,
+      "p95": 0.55,
+      "min": 0.031,
+      "max": 0.555
+    },
+    "clearance_m": {
+      "n": 36,
+      "mean": -0.145,
+      "median": -0.228,
+      "p05": -0.361,
+      "p95": 0.15,
+      "min": -0.369,
+      "max": 0.155
+    },
+    "trigger_ttc_ms": {
+      "n": 20,
+      "mean": 29.39,
+      "median": 31.45,
+      "p05": -15.035,
+      "p95": 61.405,
+      "min": -15.7,
+      "max": 82.4
+    },
+    "trigger_dist_m": {
+      "n": 20,
+      "mean": 0.701,
+      "median": 0.793,
+      "p05": 0.25,
+      "p95": 0.896,
+      "min": 0.243,
+      "max": 0.923
+    },
+    "compute_latency_us": {
+      "n": 20,
+      "mean": 7.45,
+      "median": 7.0,
+      "p05": 5.95,
+      "p95": 10.1,
+      "min": 5.0,
+      "max": 12.0
+    },
+    "detect_to_send_us": {
+      "n": 20,
+      "mean": 201.085,
+      "median": 202.1,
+      "p05": 161.075,
+      "p95": 252.335,
+      "min": 149.2,
+      "max": 253.0
+    },
+    "response_latency_ms": {
+      "n": 20,
+      "mean": 181.01,
+      "median": 185.0,
+      "p05": 162.61,
+      "p95": 198.95,
+      "min": 117.2,
+      "max": 205.6
+    },
+    "hits_given_triggered": 20,
+    "n_triggered": 20,
+    "hits_given_not_triggered": 5
+  },
+  "legacy attitude cmd": {
+    "arm": "legacy",
+    "config": "drone",
+    "n_trials": 36,
+    "n_unsettled": 12,
+    "hits": 31,
+    "hit_rate": 0.8611,
+    "hit_rate_ci95": [
+      0.7134,
+      0.9392
+    ],
+    "evasion_success_rate": 0.1389,
+    "evasion_success_ci95": [
+      0.0608,
+      0.2866
+    ],
+    "detection_rate": 0.9167,
+    "first_mode_short": 9,
+    "first_mode_long": 24,
+    "reached_short": 27,
+    "min_dist_m": {
+      "n": 36,
+      "mean": 0.264,
+      "median": 0.238,
+      "p05": 0.05,
+      "p95": 0.66,
+      "min": 0.008,
+      "max": 0.721
+    },
+    "clearance_m": {
+      "n": 36,
+      "mean": -0.136,
+      "median": -0.162,
+      "p05": -0.35,
+      "p95": 0.26,
+      "min": -0.392,
+      "max": 0.321
+    },
+    "trigger_ttc_ms": {
+      "n": 33,
+      "mean": 174.245,
+      "median": 153.7,
+      "p05": 97.42,
+      "p95": 343.3,
+      "min": 74.9,
+      "max": 372.9
+    },
+    "trigger_dist_m": {
+      "n": 33,
+      "mean": 2.045,
+      "median": 2.015,
+      "p05": 1.541,
+      "p95": 2.586,
+      "min": 1.174,
+      "max": 2.736
+    },
+    "compute_latency_us": {
+      "n": 33,
+      "mean": 6.606,
+      "median": 6.0,
+      "p05": 5.0,
+      "p95": 8.4,
+      "min": 5.0,
+      "max": 12.0
+    },
+    "detect_to_send_us": {
+      "n": 33,
+      "mean": 145.094,
+      "median": 134.7,
+      "p05": 98.04,
+      "p95": 179.9,
+      "min": 92.8,
+      "max": 559.3
+    },
+    "response_latency_ms": {
+      "n": 0
+    },
+    "hits_given_triggered": 31,
+    "n_triggered": 33,
+    "hits_given_not_triggered": 0
+  },
+  "controls": {
+    "no_object": {
+      "n_trials": 30,
+      "false_triggers": 0,
+      "false_trigger_rate": 0.0,
+      "false_trigger_rate_ci95": [
+        0.0,
+        0.1135
+      ],
+      "observed_seconds": 240.0,
+      "false_triggers_per_hour": 0.0
+    },
+    "flyby": {
+      "n_trials": 30,
+      "false_triggers": 0,
+      "false_trigger_rate": 0.0,
+      "false_trigger_rate_ci95": [
+        0.0,
+        0.1135
+      ],
+      "miss_distance_m": {
+        "n": 30,
+        "mean": 3.086,
+        "median": 2.98,
+        "p05": 2.604,
+        "p95": 3.696,
+        "min": 2.53,
+        "max": 3.73
+      }
+    }
+  },
+  "example_trials": {
+    "reflex_evaded": "0081",
+    "reflex_hit": "0021",
+    "baseline_hit": "0130"
+  },
+  "ulog_check": {
+    "ulog": "15_16_37.ulg",
+    "episodes_found": 121,
+    "reflex_trials_with_trigger": 119,
+    "setpoint_log_rate_hz": 10.0,
+    "dv_at_0p5s": {
+      "n": 121,
+      "mean": 2.463,
+      "median": 2.712,
+      "p05": 1.459,
+      "p95": 2.992,
+      "min": -2.67,
+      "max": 3.144
+    },
+    "disp_at_0p5s": {
+      "n": 121,
+      "mean": 0.511,
+      "median": 0.537,
+      "p05": 0.266,
+      "p95": 0.725,
+      "min": -0.578,
+      "max": 0.789
+    },
+    "t_dv_0p2_s": {
+      "n": 118,
+      "mean": 0.14,
+      "median": 0.136,
+      "p05": 0.092,
+      "p95": 0.192,
+      "min": 0.052,
+      "max": 0.216
+    }
+  },
+  "campaign": {
+    "started_unix": 1792423042.1036954,
+    "finished_unix": 1792428859.9518902,
+    "args": {
+      "url": "udpin:0.0.0.0:14540",
+      "out": "docs/sim",
+      "speeds": "6,10,14",
+      "az": "-15,0,15",
+      "el": "0,8",
+      "dist": "15,25",
+      "aim_err": 0.1,
+      "reps": 3,
+      "baseline_reps": 2,
+      "fly_reps": 1,
+      "legacy_reps": 1,
+      "controls": 30,
+      "noise_hz": 0.3,
+      "seed": 1,
+      "limit": 0
+    },
+    "r_obj": 0.15,
+    "r_vehicle": 0.25,
+    "hover_alt": 10.0,
+    "loop_dt": 0.002,
+    "presets": {
+      "fly": {},
+      "drone": {
+        "fov_deg": 60.0,
+        "lplc2_half_size_deg": 4.0,
+        "lc4_half_velocity_dps": 20.0
+      }
+    },
+    "gt_samples": 1274226
+  }
+}

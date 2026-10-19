@@ -1,0 +1,34 @@
+{
+  "started_unix": 1792423042.1036954,
+  "finished_unix": 1792428859.9518902,
+  "args": {
+    "url": "udpin:0.0.0.0:14540",
+    "out": "docs/sim",
+    "speeds": "6,10,14",
+    "az": "-15,0,15",
+    "el": "0,8",
+    "dist": "15,25",
+    "aim_err": 0.1,
+    "reps": 3,
+    "baseline_reps": 2,
+    "fly_reps": 1,
+    "legacy_reps": 1,
+    "controls": 30,
+    "noise_hz": 0.3,
+    "seed": 1,
+    "limit": 0
+  },
+  "r_obj": 0.15,
+  "r_vehicle": 0.25,
+  "hover_alt": 10.0,
+  "loop_dt": 0.002,
+  "presets": {
+    "fly": {},
+    "drone": {
+      "fov_deg": 60.0,
+      "lplc2_half_size_deg": 4.0,
+      "lc4_half_velocity_dps": 20.0
+    }
+  },
+  "gt_samples": 1274226
+}

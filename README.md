@@ -1,284 +1,252 @@
 <div align="center">
-
-<img src="docs/assets/logo.png" alt="GiantFiber (GF-1) Logo" width="160"/>
+<img src="docs/assets/logo.png" alt="GiantFiber logo" width="140"/>
 
 # GiantFiber (GF-1)
-### Sub-5ms, Sub-1W Bio-Reflex Coprocessor for Autonomous Drones & Robots
-**Drosophila Connectome Prior (FlyWire / MaleCNS) × Jev System-1 Calibrated Decision Theory × PX4-Autopilot Flight Stack**
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Inference Latency](https://img.shields.io/badge/Pure_Compute_Latency-1.09µs-brightgreen.svg)]()
-[![PX4 Native MAVLink](https://img.shields.io/badge/PX4_Autopilot-MAVLink_v2_Ready-blue.svg)](https://github.com/PX4/PX4-Autopilot)
-[![Memory Safety](https://img.shields.io/badge/Memory_Leak-0_KB_(O(1)_Constant)-green.svg)]()
-[![Power Budget](https://img.shields.io/badge/Power_Consumption-0.51W_Nominal-orange.svg)]()
-[![Connectome Prior](https://img.shields.io/badge/Bio_Prior-FlyWire_Drosophila_160K-teal.svg)]()
+An event-camera looming-escape reflex modelled on the *Drosophila* Giant Fiber circuit, with
+connectome-derived weights (FlyWire v783, MANC v1.2.1). It is a Rust core (std and `no_std`) with a
+Python SDK, a PX4 offboard bridge, a CAN-FD frame and a Verilog prototype of the descending stage.
 
-<br/>
-
-**English | [中文版 (Chinese Version)](README_CN.md)**
-
-<br/>
-
-<!-- Featured Multimedia Asset -->
-<img src="docs/assets/evasion_simulation.gif" alt="GiantFiber 14 m/s Projectile Evasion Simulation" width="880"/>
-
-*High-Fidelity Real-Dynamics Hardware-in-the-Loop Simulation: A 14 m/s Nerf projectile approaching a drone in flight. Col4 retinal looming expansion triggers Giant Fiber reflex in **1.09 µs**, preempting PX4 Autopilot via MAVLink v2 to execute an explosive 90° knife-edge roll evasion (0.45m clearance miss, 0.0% false trigger rate).*  
-*(High-definition 60fps MP4 video: [`docs/assets/evasion_demo.mp4`](docs/assets/evasion_demo.mp4) | 🎮 **[Launch Interactive 60fps Multi-Domain Web Simulation](docs/simulation.html)** across Drones, Humanoid Robots, Mining & Medical Robotics)*
-
-<br/>
-
-[Why GiantFiber?](#-why-giantfiber-from-the-builders-perspective) • [Core Technology](#-core-technologies--connectome-architecture) • [Acknowledgments](#-acknowledgments--technology-partners) • [Value & Benefits](#-what-value-does-giantfiber-deliver) • [PX4 Integration](#-px4-autopilot-integration-guide) • [Empirical Benchmarks](#-empirical-benchmarks--stress-suite) • [Quickstart](#-quickstart--reproduction)
-
+[![CI](https://github.com/reacherwu/giant-fiber/actions/workflows/ci.yml/badge.svg)](https://github.com/reacherwu/giant-fiber/actions/workflows/ci.yml)
 </div>
 
----
-
-### ⚠️ Disclaimer & Trademark Notice
-
-GiantFiber is an independent open-source research and engineering initiative. It is neither affiliated with, sponsored by, nor endorsed by commercial foundation model providers or proprietary drone manufacturers. 
-
-`PX4`, `Pixhawk`, and `MAVLink` are trademarks of their respective owners (Dronecode Foundation and Pixhawk Project), referenced here strictly under nominative fair use to describe technical compatibility and protocol compliance.
+> **Status: research prototype.** Everything below was measured in simulation: synthetic events
+> and PX4 SITL. Nothing has been flown, run on real event-camera data, or measured on embedded
+> hardware, and no power figure exists. In the PX4 SITL campaign the reflex did **not** reduce
+> collisions; see [the results](#px4-sitl-incoming-object-campaign).
 
 ---
 
-### 💡 Why GiantFiber? (From the Builder's Perspective)
+## What it does
 
-If you design autonomous drones (UAVs), quadruped robots, or agile mobile systems, you have almost certainly encountered this painful physical reality:
-
-> **You mounted a high-end NVIDIA Jetson or deployed a cloud Vision-Language-Action (VLA/VLM) foundation model. Mission planning is seamless. Yet, when a bird swoops in at 15 m/s, an overhead wire suddenly appears, or an incoming projectile flies toward the vehicle—the robot simply crashes.**
-
-#### The Lethal "150-Millisecond Physical Blind Spot"
-Modern robotics architectures route perception exclusively through **System-2 (Deliberate Slow Planning)**:
-- Standard CMOS vision runs at $30\sim60\text{ FPS}$ (incurring a $16\sim33\text{ ms}$ frame buffering penalty).
-- Deep convolutional networks, Vision Transformers, and attention mechanisms take **$150\text{ ms} \sim 500\text{ ms}$** of inference compute.
-- Power draw climbs to **$15\text{W} \sim 30\text{W}+$**, requiring heavy heatsinks and active fans.
-
-**In physical dynamics, a 150ms latency at a 15 m/s closing speed creates a 2.25-meter blind spot.** By the time the bounding box or trajectory optimization completes, physical impact has already occurred.
-
-```text
-[Multimodal Foundation VLM] : ─────────── 180 ~ 350 ms ───────────> [ 💥 LETHAL COLLISION / CRASH ]
-[Classic Dense Optical Flow] : ──── 25 ~ 45 ms ────> [ Oscillates / Blind to Looming ]
-[GiantFiber (GF-1)]          : ── 0.001 ms (1.09 µs) ──> [ ⚡ 90° KNIFE-EDGE EVASION & RECOVERY ]
+```
+events (x, y, t, polarity)
+  -> 64x64 time surface
+  -> looming estimate: angular size θ, expansion rate dθ/dt, coherence / translation gates
+  -> LPLC2 (size-tuned) and LC4 (velocity-tuned) population activity, left/right
+  -> Giant Fiber (DNp01) and non-GF descending pathway leaky integrators
+       weights = FlyWire v783 synapse-count fractions
+  -> escape mode: LONG (non-GF crosses its threshold) or SHORT (GF spike; upgrades LONG within 30 ms)
+  -> discrete action (roll away from the stimulus / pitch) + confidence gate
+  -> PX4: acceleration setpoints (SET_POSITION_TARGET_LOCAL_NED), or a 24-byte CAN-FD frame
 ```
 
-#### Nature's 100-Million-Year Blueprint: Machines Need a Cerebellum
-The fruit fly (*Drosophila melanogaster*) possesses no 30W GPU. With only **~160,000 neurons** and microwatts of metabolic power, it evades predatory strikes in **2–3 milliseconds** with near-zero failure rates.
+Biological basis and how far the model follows it:
 
-**GiantFiber exists to give autonomous machines this biological "first instinct":**
-- **System-2 (The Cortex)**: High-level planners and VLMs handle semantic reasoning, mission planning, and mapping.
-- **System-1 (GiantFiber / Cerebellum & Spinal Reflex)**: An ultra-low-power, sub-5ms coprocessor with preemption rights over flight actuators, guaranteeing physical survival against high-speed threats.
+| element | source | in the model |
+|---|---|---|
+| LPLC2 encodes angular size, LC4 angular velocity; both drive the GF | Ache et al. 2019; von Reyn et al. 2017 | activation functions (sigmoid in θ, saturating in dθ/dt); half-activation points are parameters |
+| LPLC2/LC4 → DNp01 synapse counts, per hemisphere | FlyWire v783 (Dorkenwald et al. 2024; Schlegel et al. 2024) | real root IDs and counts in `data/connectome/`, normalised per target as weights |
+| parallel non-GF descending pathway with a lower threshold → long-mode takeoff; GF spike → short mode | von Reyn et al. 2014 | top-8 non-GF DN types by LPLC2+LC4 input (our selection rule); thresholds 0.30 vs 0.55 |
+| GF → TTMn / PSI → DLMn | MANC v1.2.1 (Takemura, Marin, Cheong et al. 2024) | tabulated (`manc121_gf_motor_edges.csv`), not simulated; GF→TTMn is largely electrical and EM counts miss gap junctions |
+| heading-hold "central complex" | — | a plain heading integrator, **not** connectome-derived |
 
----
+Time constants, thresholds and activation shapes are modelling choices, not fits to electrophysiology.
+The connectome data were extracted with `tools/connectome/extract_escape_circuit.py`; see
+[data/connectome/README.md](data/connectome/README.md) for sources and the CC-BY 4.0 license.
 
-### 🧬 Core Technologies & Connectome Architecture
+## Model validation (synthetic stimuli)
 
-<div align="center">
-<img src="docs/assets/architecture_px4.png" alt="GiantFiber PX4 Architecture" width="860"/>
-</div>
+`python3 tools/validation/validate_escape_model.py --out docs/model` (0.15 m sphere, 90° camera,
+geometric event synthesis, 5 seeds per condition):
 
-GiantFiber synthesizes neurobiology, discrete decision theory, and low-level systems engineering:
+| r/v (ms) | mean θ at GF spike | GF spike before contact | reached short mode | long mode only |
+|---|---|---|---|---|
+| 5  | 26.4° | 16.9 ms  | 5/5 | 0/5 |
+| 10 | 24.6° | 36.9 ms  | 5/5 | 0/5 |
+| 20 | 25.0° | 72.4 ms  | 5/5 | 0/5 |
+| 40 | 26.9° | 132.4 ms | 3/5 | 2/5 |
+| 80 | 32.8° | 204.2 ms | 0/5 | 5/5 |
 
-#### 1. Drosophila Connectome Biological Prior (FlyWire / MaleCNS)
-We extract validated synaptic topologies from the 166,000-neuron connectome:
-* **Lobula Col4 Neurons**: Compute non-linear angular looming expansion ($r/v$) directly on the neuromorphic time surface:
-  $$\frac{d\theta}{dt} = \frac{2 r v}{d(t)^2 + r^2}$$
-* **Giant Fiber (GF) System**: High-conductance cervical descending interneurons (`720575940614131001` / `720575940614131002`). Features **bidirectional GABAergic negative inhibition**: negative optical contraction actively hyperpolarizes the membrane, suppressing high-frequency white noise and achieving a **0.0% False Positive Rate**.
-* **Lobula Plate Tangential Cells (LPTC HS/VS)**: Wide-field optical flow cells computing divergence:
-  $$\text{Div} = \nabla \cdot \mathbf{v} = \frac{\partial v_x}{\partial x} + \frac{\partial v_y}{\partial y}$$
-  Resolves left/right threat asymmetry in under $100\ \mu\text{s}$.
-* **Central Complex (CX E-PG / P-EN)**: A 16-wedge ring attractor maintaining an internal heading compass. After the drone completes an evasive roll, CX automatically generates counter-torque to re-stabilize the vehicle into steady cruise.
+- The GF spike time before contact is linear in r/v (2.47·r/v + 16.0 ms, r = 0.980), the signature of a
+  size threshold.
+- Fast looms end in short mode and slow looms in long mode. This is the qualitative split from von Reyn 2014.
+- Receding, lateral, static and noise-only stimuli (0.1–3 Hz/px) gave 0/35 escapes.
 
-#### 2. Jev System-1 Calibrated Decision Primitive
-* **Zero Free-Text Generation**: Eliminates token decoding latency, hallucinations, and unconstrained memory buffers.
-* **Strict Pydantic Enums**: Outputs strictly validated discrete action candidates (`ROLL_RIGHT_90`, `ROLL_LEFT_90`, `PITCH_UP`, `BRAKE`, `CRUISE`).
-* **Temperature-Scaled Calibration**: Maps raw logits to true statistical probabilities ($P \in [0.0, 1.0]$). Below the safety threshold ($\theta < 0.85$), the system strictly preserves nominal cruise.
+![validation](docs/model/looming_validation.png)
 
-#### 3. Pure Rust Native Core & Physical $O(K)$ Memory
-* Built in pure, zero-external-dependency Rust with flat array allocation.
-* **Strict $O(K)$ Physical Memory**: Proved zero memory growth ($\Delta\text{RSS} = 0\ \text{KB}$) over $1,000,000$ continuous events.
-* **Microsecond Binary Persistence**: 144-byte binary snapshot (`b"GF1\0"` with Adler-32 verification) serializes in $3.27\ \mu\text{s}$ and restores in $7.52\ \mu\text{s}$.
+## PX4 SITL incoming-object campaign
 
-#### 4. PX4-Autopilot MAVLink v2 Native Integration
-* Built specifically for the industry-standard **PX4-Autopilot** flight stack.
-* Ingests PX4 `HIGHRES_IMU` telemetry at 250Hz ~ 1kHz to calibrate biomimetic Halteres.
-* Injects high-priority `SET_ATTITUDE_TARGET` MAVLink overrides in $< 10\ \mu\text{s}$ upon threat detection.
+**Setup.**
+- PX4 v1.15.4, SIH quadrotor (`sihsim_quadx`), headless, real-time, offboard mode, hovering at 10 m.
+- A 0.30 m sphere is launched at constant speed (6, 10 or 14 m/s) from 15 or 25 m. Azimuth is −15/0/+15°
+  and elevation 0/8°. It is aimed at the vehicle's launch position with ≤ 0.1 m aim error.
+- Events are synthesised at about 480 Hz from the object geometry and the vehicle's ground-truth pose
+  (HIL_STATE_QUATERNION): XOR occupancy changes of the projected disk on a 320×320 camera, plus
+  0.3 Hz/px Poisson noise. There is no texture, no DVS pixel model and no motion blur.
+- Collision means the minimum centre distance is < 0.40 m (object radius 0.15 m + vehicle radius 0.25 m),
+  from ground truth.
 
----
+**Arms.**
+- *Baseline*: the engine runs, but nothing is sent and the vehicle keeps hovering.
+- *Reflex (drone preset)*: 60° FOV, LPLC2 half-size 4°, LC4 half-velocity 20°/s. On an escape it streams
+  9 m/s² (short mode) or 5 m/s² (long mode) acceleration setpoints sideways or vertically for 0.5 s, then
+  holds position.
+- *Reflex (fly preset)*: the default fly-scale thresholds with a 90° FOV.
+- *Legacy*: the original single SET_ATTITUDE_TARGET packet.
+- Controls: 30 × 8 s hover with no object, and 30 fly-bys that miss by 2.5–3.7 m.
 
-### 🤝 Acknowledgments & Technology Partners
+The campaign ran 312 trials from 2026-10-19 08:17 to 09:54 PDT on the machine listed below.
+Reproduce it with `bash sim/px4_sitl/run_all.sh`.
 
-GiantFiber stands on the shoulders of giants across neurobiology, systems engineering, and robotics:
+| arm | trials | collisions | collision rate [95% CI] | escape triggered | median trigger distance | median time-to-contact at trigger |
+|---|---|---|---|---|---|---|
+| no reflex (baseline) | 72 | 54 | **75.0%** [63.9, 83.6] | 61 (85%) | 1.81 m | 146 ms |
+| reflex, drone preset | 108 | 85 | **78.7%** [70.1, 85.4] | 99 (92%) | 2.11 m | 168 ms |
+| reflex, fly preset | 36 | 25 | 69.4% [53.1, 82.0] | 20 (56%) | 0.79 m | 31 ms |
+| legacy attitude packet | 36 | 31 | 86.1% [71.3, 93.9] | 33 (92%) | 2.02 m | 154 ms |
 
-* 🌟 **[FlyWire Consortium](https://flywire.ai/) & Princeton Neuroscience Institute (Princeton University)**:  
-  For mapping and open-sourcing the complete synaptic connectome of *Drosophila melanogaster* (166,000 neurons, 130M+ synapses), providing the empirical foundation for our bio-circuits.
-* 🌟 **[Google Research](https://research.google/) & [Janelia Research Campus](https://www.janelia.org/)**:  
-  For pioneering deep-learning-based connectome segmentation, electron microscopy alignment, and automated skeleton reconstruction tools.
-* 🌟 **[PX4-Autopilot](https://github.com/PX4/PX4-Autopilot) & [Dronecode Foundation](https://www.dronecode.org/)**:  
-  For creating the world-leading open-source flight control ecosystem, modular architecture, and the MAVLink protocol standard.
-* 🌟 **Jev Discrete Decision Architecture**:  
-  For formalizing the mathematical principles of non-autoregressive, calibrated System-1 primitives for deterministic edge control.
+| control | trials | false triggers |
+|---|---|---|
+| hover, no object (240 s total) | 30 | 0 (95% CI upper bound 11%) |
+| fly-by, 2.5–3.7 m miss | 30 | 0 (95% CI upper bound 11%) |
 
----
+![collision rate by speed](docs/sim/collision_rate_by_speed.png)
 
-### 🚀 What Value Does GiantFiber Deliver?
+**Finding: the reflex detects the threat, but too late for this vehicle to get out of the way.**
+- With the drone preset the escape triggers at a median of 2.1 m (168 ms before contact).
+- The vehicle's measured response is too slow for that margin. The time from trigger until its
+  ground-truth velocity changes by 0.2 m/s along the escape direction has a median of **186 ms**
+  (p5–p95 167–216 ms, n = 99).
+- In PX4's own log (121 acceleration-setpoint episodes in the ulog), the vehicle moved a median of
+  0.54 m along the commanded direction 0.5 s after the first *logged* setpoint. The setpoint topic is
+  logged at 10 Hz.
+- So for most trials the vehicle has barely moved at closest approach. The collision rate with the
+  reflex is statistically indistinguishable from the baseline: 78.7% vs 75.0%, overlapping CIs.
+- The fly preset fires even later (median 31 ms before contact), matching the fly-scale angular thresholds.
+- The single-packet legacy command is overridden by the next offboard setpoint and has no effect.
+- The baseline does not hit 100% because the hover drifts by a few tenths of a metre during the
+  object's 1–4 s flight.
 
-<div align="center">
-<img src="docs/assets/benchmark_comparison.png" alt="Benchmark Comparison Chart" width="840"/>
-</div>
+The bottleneck is detection range, not compute:
+- Compute per step is 6 µs median.
+- Trigger to setpoint sent takes 183 µs median, including the MAVLink encode and UDP send.
+- The 64×64 internal time surface needs the object to cover several cells. In an offline check
+  (`python3 tools/validation/detection_range.py`, 6 head-on runs per setting, 0.3 m object):
+  - the SITL drone preset triggered at 1.6–2.6 m;
+  - lowering the thresholds gave 1.9–3.5 m (mostly about 2.6 m);
+  - a 30° FOV gave 2.9–4.0 m;
+  - none of these settings triggered on the 6 fly-bys.
+- Making this useful for a quadrotor needs earlier detection (a higher-resolution surface or a
+  narrower FOV), a faster actuation path, or both. These are open items.
 
-| Evaluation Dimension | Edge VLM (e.g. Jetson Orin) | Classic Optical Flow (OpenCV) | GiantFiber (GF-1) |
-| :--- | :--- | :--- | :--- |
-| **Pure Compute Latency** | 150 ~ 500 ms | 25 ~ 45 ms | **1.09 µs (0.001 ms)** |
-| **End-to-End Reaction Time** | 180 ~ 600 ms | 40 ~ 80 ms | **< 4.0 ms (including MAVLink)** |
-| **Power Consumption** | 15W ~ 30W+ (Active cooling) | 5W ~ 10W | **0.51W ~ 0.62W** (Powers from 5V BEC) |
-| **Long-Term Memory Footprint** | 4GB ~ 16GB (VRAM bloat) | 120MB+ (Heap fragmentation) | **0 KB Leak** ($O(1)$ constant physical RAM) |
-| **White Noise Robustness** | Hallucinates context | Diverges on camera noise | **0.0% False Trigger Rate** (GABA inhibition) |
-| **14 m/s Looming Threat** | ❌ **Crash / Collision** | ⚠️ **Delayed / Glancing Hit** | ✅ **100% Evasion (0.45m clearance)** |
-| **PX4 Flight Stack Integration**| Complex ROS 2 bridge | Custom kinematics glue | **Native MAVLink v2 (5 lines of Python)** |
+Ground-truth trajectories (view from behind the vehicle; circles mark the closest approach):
 
----
+![trajectories](docs/sim/trajectories.png)
 
-### 🔌 PX4-Autopilot Integration Guide
+| reflex trial that evaded (6 m/s) | baseline trial that was hit (10 m/s) |
+|---|---|
+| ![evasion](docs/sim/evasion.gif) | ![baseline](docs/sim/baseline_hit.gif) |
 
-GiantFiber operates in **Companion Guardian Architecture**. You can run GiantFiber on a lightweight companion computer (Raspberry Pi Zero 2W, NVIDIA Jetson, STM32, or Radxa) connected to a Pixhawk flight controller via UART or Ethernet UDP.
+The animations are rendered from the logged ground truth (top view) with the engine's internal state.
+They are not camera footage.
 
-#### 1. Hardware Connection Topology
-```text
-[DVS Event Camera / Sensor] ──── (USB / SPI) ────┐
-                                                ▼
-                                    ┌───────────────────────┐
-                                    │ GiantFiber Companion  │
-                                    │ (Native Rust Core)    │
-                                    └───────────┬───────────┘
-                                                │ MAVLink v2 (UART/UDP: 14540)
-                                                ▼
-                                    ┌───────────────────────┐
-                                    │ Pixhawk / PX4 Flight  │
-                                    │ Controller (FMUv6X)   │
-                                    └───────────┬───────────┘
-                                                │ PWM / CAN-FD
-                                                ▼
-                                    [ ESCs & Brushless Motors ]
+Vehicle response from the PX4 ulog (one line per escape episode, aligned to the first logged
+acceleration setpoint). A few episodes show motion opposite to the averaged setpoint. These were not investigated
+individually; a likely cause is that the analysis merges setpoints less than 2 s apart, so it can
+combine two escape commands with different directions into one episode. The analysis found 121
+episodes in the ulog against 119 reflex trials that triggered.
+
+![ulog response](docs/sim/ulog_escape_response.png)
+
+Data:
+- `docs/sim/trials.csv`: one row per trial.
+- `docs/sim/traces/*.csv.gz`: 100 Hz traces per trial.
+- `docs/sim/summary.json` and `summary_by_speed.csv`
+- `docs/sim/ulog_escape_episodes.csv`
+- `docs/sim/campaign_meta.json`
+
+The 1.3 GB ulog is not committed. `sim/px4_sitl/analyze.py --ulog <file>` regenerates the plots
+from a new run.
+
+## Benchmarks
+
+`python3 benchmarks/run_benchmarks.py --json benchmarks/results.json` on an Intel Xeon (8 vCPU)
+cloud VM running Linux 6.12, with Python 3.13.5 and rustc 1.99.1. All figures were measured in that
+run (see `benchmarks/results.json`):
+
+| measurement | result |
+|---|---|
+| native `step_eval` (Rust, looming stimulus, 56,100 steps) | mean 1.72 µs, p99 5.88 µs, max 34 µs |
+| native event ingestion | 141 M events/s |
+| Python → C ABI round trip (feed + step + pydantic object) | median 7.7 µs, p99 96 µs |
+| event ingestion through the C ABI | 31.5 M events/s |
+| snapshot save / restore (280 bytes) | 0.80 µs / 0.76 µs |
+| MAVLink SET_POSITION_TARGET_LOCAL_NED encode (Python) | 11.7 µs |
+| CAN-FD encode + decode (Python) | 28.3 µs |
+| EVT2 decode (Python) | 1.59 M events/s |
+| false triggers, 60 s of 1 Hz/px noise | 0 |
+
+These are desktop-CPU numbers. They say nothing about a microcontroller, and no power was measured.
+
+## Components
+
+| path | what |
+|---|---|
+| `crates/giantfiber-core` | Rust engine. `cargo build --no-default-features --features libm --target thumbv7em-none-eabihf` builds `no_std` (checked in CI); the C ABI (`ffi.rs`) needs `std` |
+| `giantfiber/` | Python SDK (ctypes), PX4 bridge (`integrations/px4_mavlink.py`), CAN-FD + SocketCAN (`integrations/can_fd.py`), Prophesee EVT2/EVT3 decoders, event synthesis (`sim/events.py`) |
+| `crates/.../canfd.rs` | `no_std` 24-byte CAN-FD frame, byte-identical to the Python codec (tested). The SocketCAN loopback test passes on a `vcan0` interface in CI; it has not been tested on physical CAN hardware |
+| `rtl/` | Verilog prototype of the GF/non-GF stage. In Icarus Verilog it matches the Rust engine on 10/11 stimuli exactly and on 1 within one step. Simulation only, not synthesised ([rtl/README.md](rtl/README.md)) |
+| `tools/connectome` | connectome extraction (FlyWire v783, MANC v1.2.1) |
+| `tools/validation` | model validation on synthetic looms |
+| `sim/px4_sitl` | SITL campaign, analysis, one-command reproduction |
+
+The EVT2/EVT3 decoders follow the published Prophesee word formats. They have only been tested on
+synthetic words, not on recordings from a real sensor.
+
+## Quick start
+
+```bash
+cargo build --release
+pip install -r requirements-dev.txt
+cargo test && python3 -m pytest tests -q
+python3 examples/looming_demo.py          # prints θ, membranes and the escape decision for a loom
 ```
-
-#### 2. Software Integration (5 Lines of Python)
-
-Connect to physical Pixhawk hardware or PX4 SITL (Software-In-The-Loop) with `PX4ReflexBridge`:
 
 ```python
-from giantfiber.integrations.px4_mavlink import PX4ReflexBridge, PX4BridgeConfig
-
-# Configure connection (supports UDP 14540 for SITL or '/dev/ttyUSB0' for Pixhawk)
-config = PX4BridgeConfig(px4_ip="127.0.0.1", px4_port=14540)
-
-with PX4ReflexBridge(config) as bridge:
-    # 1. Ingest incoming MAVLink packets (parses 250Hz+ HIGHRES_IMU to calibrate compass)
-    bridge.handle_incoming_bytes(mavlink_bytes_from_px4)
-
-    # 2. Feed asynchronous DVS visual event spikes (x, y, timestamp_us, polarity)
-    bridge.feed_visual_spike(x=32, y=32, timestamp_us=10200, polarity=1)
-
-    # 3. Evaluate connectome state; automatically fires MAVLink SET_ATTITUDE_TARGET on threat!
-    decision = bridge.step_eval(now_us=10200)
-
-    if decision.triggered:
-        print(f"⚡ EMERGENCY OVERRIDE FIRED: {decision.action.name} (Conf: {decision.confidence:.2%})")
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
+with GiantFiberCoprocessor(ReflexConfig()) as gf:
+    gf.feed_raw_spikes(buf)        # numpy array of giantfiber.sim.events.EVENT_DTYPE, .tobytes()
+    d = gf.step_eval(now_us)       # ReflexDecision: action, escape_mode, vector, confidence, triggered
 ```
 
----
+PX4 (SITL or companion computer, offboard mode):
+`PX4ReflexBridge(PX4BridgeConfig()).step_eval(t_us)` starts an escape on a decision.
+`evasion_packet()` returns the acceleration setpoint to stream while `evasion_active()` is true.
+See `sim/px4_sitl/run_campaign.py` for a complete loop.
 
-### 📊 Empirical Benchmarks & Stress Suite
+Make targets: `test`, `clippy`, `nostd`, `bench`, `validate`, `rtl`, `connectome`, `sitl`.
 
-All benchmarks run on physical hardware with zero synthetic vector shortcuts. Tests cover adversarial alert storms and live MAVLink roundtrips:
+## Roadmap
 
-#### 1. 7-Dimension Exhaustive Stress Matrix (`make stress`)
-| Dimension | SLO Requirement | Empirical Result | Margin / Status |
-| :---: | :--- | :--- | :---: |
-| **1. Pure Rust Compute Latency** | $< 1000\ \mu\text{s}$ | **$1.09\ \mu\text{s}$** (p99: $2\ \mu\text{s}$) | ✅ **900x faster than target** |
-| **2. Python Full Roundtrip Latency** | $< 4000\ \mu\text{s}$ | **$4.55\ \mu\text{s}$** (p99: $6.08\ \mu\text{s}$) | ✅ **870x faster than target** |
-| **3. Burst Event Throughput** | $> 1,000,000\ \text{eps}$ | **$3,344,243\ \text{eps}$** ($3.34\text{M}$ events/sec) | ✅ **3.34x above target** |
-| **4. IMU 2kHz Ingestion Speed** | $< 100\ \mu\text{s}$ | **$0.699\ \mu\text{s}$** (Supports up to 1.4MHz) | ✅ **140x faster than target** |
-| **5. Microsecond Persistence** | $< 1000\ \mu\text{s}$ | Save **$3.27\ \mu\text{s}$**, Restore **$7.52\ \mu\text{s}$** (144 bytes) | ✅ **100x faster than target** |
-| **6. 1,000,000 Event Memory Leak** | $\Delta\text{RSS} = 0\ \text{KB}$ | **$\Delta\text{RSS} = 0\ \text{KB}$** (Constant physical RAM) | ✅ **Zero Memory Leak** |
-| **7. White Noise Storm Rejection** | FAR $< 1.0\%$ | **0 / 100 epochs** triggered (**0.0% False Alarm Rate**) | ✅ **Signal-to-noise ratio $> 7\times$** |
+Done in software:
+- connectome-derived model
+- `no_std` core
+- PX4 offboard bridge tested in SITL
+- CAN-FD frame and SocketCAN transport
+- RTL prototype of the descending stage
 
-#### 2. PX4 MAVLink Protocol Roundtrip (`make px4-bench`)
-* **PX4 `HIGHRES_IMU` Ingestion**: **$12.69\ \mu\text{s}$**
-* **MAVLink `SET_ATTITUDE_TARGET` Serialization**: **$9.96\ \mu\text{s}$** (Standard 51-byte v2 packet)
-* **Threat Spike to PX4 Override Packet Out**: **$5.99\ \mu\text{s}$** (Target: $< 1,000\ \mu\text{s}$)
+Planned / not started:
+- detection range for drone-scale use (higher-resolution time surface)
+- validation on real event-camera recordings
+- hardware-in-the-loop and flight tests
+- embedded timing and power measurements
+- RTL for the front end, synthesis and FPGA
 
----
+## References
 
-### 💻 Quickstart & Reproduction
+- Ache, J. M. et al. (2019) Neural basis for looming size and velocity encoding in the *Drosophila* giant fiber escape pathway. *Curr. Biol.* 29.
+- von Reyn, C. R. et al. (2014) A spike-timing mechanism for action selection. *Nat. Neurosci.* 17.
+- von Reyn, C. R. et al. (2017) Feature integration drives probabilistic behavior in the *Drosophila* escape response. *Neuron* 94.
+- Klapoetke, N. C. et al. (2017) Ultra-selective looming detection from radial motion opponency. *Nature* 551.
+- Card, G. & Dickinson, M. H. (2008) Visually mediated motor planning in the escape response of *Drosophila*. *Curr. Biol.* 18.
+- Dombrovski, M. et al. (2023) Synaptic gradients transform object location to action. *Nature* 613.
+- Dorkenwald, S. et al. (2024) Neuronal wiring diagram of an adult brain. *Nature* 634.
+- Schlegel, P. et al. (2024) Whole-brain annotation and multi-connectome cell typing of *Drosophila*. *Nature* 634.
+- Takemura, S. et al.; Marin, E. C. et al.; Cheong, H. S. J. et al. (2024) Male adult nerve cord (MANC) papers. *eLife*.
 
-#### 1. Build Native Rust Shared Library
-```bash
-git clone https://github.com/reacherwu/giant-fiber.git
-cd giant-fiber
+## License
 
-# Compiles release dylib (377 KB, zero dependencies)
-make build
-```
-
-#### 2. Run Dual-Track Automated Test Suites
-```bash
-# Runs Rust cargo tests (5/5) and Python unit tests (9/9)
-make test
-
-# Runs dedicated PX4 MAVLink SITL integration tests
-make px4-test
-```
-
-#### 3. Run Stress & PX4 Benchmarks
-```bash
-# 7-dimension stress suite (throughput, memory leak, noise rejection)
-make stress
-
-# PX4 MAVLink nanosecond serialization & roundtrip benchmark
-make px4-bench
-```
-
-#### 4. Run the 14 m/s Projectile Evasion Terminal Demo
-```bash
-make demo
-```
-
-Output:
-```text
-[T=  1.0ms] Dist: 1.99m | Drone Pos: [         ⚡✈         ] | Action: ROLL_RIGHT_90 | Conf: [████████████████████] 1.00 | Pwr: 0.62W
-
-[TEST COMPLETED: EVASION SUCCESSFUL]
- • Looming Detection & Interrupt Triggered At : T = 1.0 ms
- • Giant Fiber System Action Fired             : ROLL_RIGHT_90
- • Calibrated Statistical Confidence          : 100.0%
- • Projectile Impact Line Crossing At          : T = 142.9 ms
- • Lateral Clearance at Impact Plane          : 0.45 meters (Clean Miss!)
-```
-
-#### 5. Regenerate Multimedia Assets (GIF, MP4, PNG)
-If you adjust connectome parameters or threshold values, regenerate all media assets with a single command:
-```bash
-make assets
-```
-Assets saved in `docs/assets/`:
-- `evasion_simulation.gif`: 3-panel dynamic simulation GIF (434 KB).
-- `evasion_demo.mp4`: Standard H.264 MP4 video clip (53 KB).
-- `architecture_px4.png`: System architecture diagram.
-- `benchmark_comparison.png`: Comprehensive benchmark comparison chart.
-
----
-
-### 🗺️ Project Roadmap
-
-1. **Phase 1: PX4 Companion Guardian** *(Completed ✅)*  
-   Native MAVLink v2 bridge, SITL testing suite, and $< 15\ \mu\text{s}$ evasion preemption.
-2. **Phase 2: Smart Bio-Eye Hardware & Sensor Integration** *(Delivered ✅)*  
-   Native Prophesee EVT2/EVT3 binary stream decoder (1.84M events/s), 24-byte industrial CAN-FD reflex bus driver (<12µs), and `no_std` embedded bare-metal support.
-3. **Phase 3: Silicon RTL IP Core** *(In Progress ⏳)*  
-   Pure Verilog/SystemVerilog RTL hardware implementation of the sparse connectome graph accelerator for ASIC licensing to drone & robotics silicon vendors.
-
----
-
-### 📜 License
-
-GiantFiber is licensed under the [Apache License 2.0](LICENSE). Free for academic research and commercial robotics deployment.
+Code: Apache-2.0 ([LICENSE](LICENSE)). Connectome-derived tables in `data/connectome/`: CC-BY 4.0,
+from FlyWire and MANC (cite the papers above). PX4, Pixhawk and MAVLink are trademarks of their
+respective owners. This project is not affiliated with them.
