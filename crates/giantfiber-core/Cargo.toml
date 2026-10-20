@@ -6,7 +6,7 @@ authors = ["GiantFiber Team <research@giantfiber.ai>"]
 description = "Event-camera looming-escape reflex core modelled on the Drosophila LPLC2/LC4 -> Giant Fiber circuit (FlyWire v783 synapse counts)"
 license = "Apache-2.0"
 repository = "https://github.com/reacherwu/giant-fiber"
-rust-version = "1.77"
+rust-version = "1.82"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

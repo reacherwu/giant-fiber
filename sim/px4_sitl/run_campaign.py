@@ -64,6 +64,7 @@ class Vehicle:
     def __init__(self, url):
         self.m = mavutil.mavlink_connection(url, source_system=255, source_component=191)
         self.m.wait_heartbeat(timeout=30)
+        self.tsys = self.m.target_system or 1  # PX4 instance i has system id i + 1
         self.ref = None
         self.gt = None          # dict(p, v, q, t)
         self.gt_samples = 0
@@ -72,7 +73,7 @@ class Vehicle:
         self.hover_sp = (0.0, 0.0, -HOVER_ALT)
         self.last_sp = 0.0
         for mid, hz in [(115, 250), (32, 50), (0, 2)]:
-            self.m.mav.command_long_send(1, 1, mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0, mid, int(1e6 / hz), 0, 0, 0, 0, 0)
+            self.m.mav.command_long_send(self.tsys, 1, mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0, mid, int(1e6 / hz), 0, 0, 0, 0, 0)
 
     def poll(self):
         now = time.perf_counter()
@@ -105,7 +106,7 @@ class Vehicle:
         now = time.perf_counter()
         if force or now - self.last_sp > 0.02:
             x, y, z = self.hover_sp
-            self.m.mav.set_position_target_local_ned_send(0, 1, 1, 1, 0b110111111000, x, y, z, 0, 0, 0, 0, 0, 0, 0, 0)
+            self.m.mav.set_position_target_local_ned_send(0, self.tsys, 1, 1, 0b110111111000, x, y, z, 0, 0, 0, 0, 0, 0, 0, 0)
             self.last_sp = now
 
     def arm_offboard(self):
@@ -115,8 +116,8 @@ class Vehicle:
                 self.send_hover(force=True)
                 self.poll()
                 time.sleep(0.02)
-            self.m.mav.command_long_send(1, 1, 176, 0, 1, 6, 0, 0, 0, 0, 0)  # offboard
-            self.m.mav.command_long_send(1, 1, 400, 0, 1, 0, 0, 0, 0, 0, 0)  # arm
+            self.m.mav.command_long_send(self.tsys, 1, 176, 0, 1, 6, 0, 0, 0, 0, 0)  # offboard
+            self.m.mav.command_long_send(self.tsys, 1, 400, 0, 1, 0, 0, 0, 0, 0, 0)  # arm
             if time.perf_counter() - t0 > 60:
                 raise RuntimeError("could not arm")
         print("armed + offboard", flush=True)

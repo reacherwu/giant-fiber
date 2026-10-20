@@ -12,8 +12,15 @@ There is no event-camera simulator in this setup. Events are synthesized from ge
    Timestamps are spread uniformly inside the step.
 4. Optional background noise: independent Poisson events at `noise_rate_hz` per pixel.
 
+Optional sensor effects (used for the IMX636 model, see `imx636_camera`):
+5. Pixel dead time (`refractory_us`): an event within that time of the previous event at the same
+   pixel is dropped.
+6. Readout latency is modelled by the caller (see `sim/px4_sitl/run_campaign.py`, `DelayLine`).
+
 Not modelled: background texture (the scene is textureless, so ego-motion produces no events),
-contrast thresholds, pixel refractory period, readout latency, motion blur, lens distortion.
+partial-pixel coverage and contrast-threshold non-uniformity (the object is assumed to have far more
+than the 25% log-contrast threshold, so a pixel fires once when its centre is covered or uncovered),
+motion blur, lens distortion.
 """
 from __future__ import annotations
 
@@ -48,6 +55,7 @@ class EventCamera:
     fov_deg: float = 90.0
     noise_rate_hz: float = 0.0  # per pixel
     seed: int = 0
+    refractory_us: int = 0
 
     def __post_init__(self):
         self.f = (self.width / 2) / math.tan(math.radians(self.fov_deg) / 2)
@@ -57,10 +65,33 @@ class EventCamera:
         self.xx = xx.astype(np.float32) + 0.5
         self.yy = yy.astype(np.float32) + 0.5
         self.prev = np.zeros((self.height, self.width), dtype=bool)
+        self.prev_box = None
         self.rng = np.random.default_rng(self.seed)
+        self.last_t = np.zeros((self.height, self.width), dtype=np.int64) - (1 << 40) if self.refractory_us else None
 
     def reset(self):
         self.prev[:] = False
+        self.prev_box = None
+
+    def prime(self, p_cam, radius):
+        """Set the occupancy state without emitting events (object already in view before t=0)."""
+        self.prev[:] = False
+        self.prev_box = self._draw(self.prev, p_cam, radius)
+
+    def _draw(self, mask, p_cam, radius):
+        """Draw the disk into `mask`; return its pixel box (y0, y1, x0, x1) or None."""
+        pr = self.project_sphere(p_cam, radius) if p_cam is not None else None
+        if pr is None:
+            return None
+        u, v, r = pr
+        if u + r < 0 or u - r > self.width or v + r < 0 or v - r > self.height:
+            return None
+        x0, x1 = max(0, int(u - r - 1)), min(self.width, int(u + r + 2))
+        y0, y1 = max(0, int(v - r - 1)), min(self.height, int(v + r + 2))
+        if x1 <= x0 or y1 <= y0:
+            return None
+        mask[y0:y1, x0:x1] = (self.xx[y0:y1, x0:x1] - u) ** 2 + (self.yy[y0:y1, x0:x1] - v) ** 2 <= r * r
+        return (y0, y1, x0, x1)
 
     def project_sphere(self, p_cam, radius):
         """p_cam = (X right, Y down, Z forward). Returns (u, v, r_px) or None if behind / invalid."""
@@ -90,12 +121,23 @@ class EventCamera:
 
     def step(self, p_cam, radius, t0_us: int, dt_us: int):
         """Advance one step; returns a numpy array with EVENT_DTYPE."""
-        mask, _ = (self.render(p_cam, radius) if p_cam is not None
-                   else (np.zeros_like(self.prev), None))
-        changed = mask ^ self.prev
-        ys, xs = np.nonzero(changed)
-        pol = np.where(mask[ys, xs], -1, 1).astype(np.int8)
-        self.prev = mask
+        new = np.zeros_like(self.prev) if self.prev_box is None else self.prev.copy()
+        if self.prev_box is not None:
+            y0, y1, x0, x1 = self.prev_box
+            new[y0:y1, x0:x1] = False
+        box = self._draw(new, p_cam, radius)
+        boxes = [b for b in (box, self.prev_box) if b is not None]
+        if boxes:
+            y0 = min(b[0] for b in boxes); y1 = max(b[1] for b in boxes)
+            x0 = min(b[2] for b in boxes); x1 = max(b[3] for b in boxes)
+            changed = new[y0:y1, x0:x1] ^ self.prev[y0:y1, x0:x1]
+            ys, xs = np.nonzero(changed)
+            ys = ys + y0; xs = xs + x0
+        else:
+            ys = xs = np.zeros(0, dtype=np.int64)
+        pol = np.where(new[ys, xs], -1, 1).astype(np.int8)
+        self.prev = new
+        self.prev_box = box
         n_obj = len(xs)
         n_noise = 0
         if self.noise_rate_hz > 0:
@@ -111,8 +153,33 @@ class EventCamera:
             ev["y"][n_obj:] = self.rng.integers(0, self.height, n_noise)
             ev["polarity"][n_obj:] = self.rng.choice(np.array([-1, 1], dtype=np.int8), n_noise)
         if len(ev):
-            ev["timestamp_us"] = t0_us + np.sort(self.rng.integers(0, max(1, dt_us), len(ev)))
+            ev["timestamp_us"] = t0_us + self.rng.integers(0, max(1, dt_us), len(ev))
+            ev = ev[np.argsort(ev["timestamp_us"], kind="stable")]
+            if self.last_t is not None:
+                x = ev["x"].astype(np.int64); y = ev["y"].astype(np.int64); t = ev["timestamp_us"].astype(np.int64)
+                # keep the first event per pixel in this step, then apply the dead time
+                _, first = np.unique(y * self.width + x, return_index=True)
+                keep = np.zeros(len(ev), dtype=bool)
+                keep[first] = t[first] - self.last_t[y[first], x[first]] >= self.refractory_us
+                ev = ev[keep]
+                self.last_t[ev["y"].astype(np.int64), ev["x"].astype(np.int64)] = ev["timestamp_us"].astype(np.int64)
         return ev
+
+
+# Prophesee / Sony IMX636 (EVK4 HD): 1280 x 720, 4.86 um pixels. Typical contrast threshold 25%,
+# latency < 100 us at 1000 lx and < 1000 us at 5 lx, background rate <= 0.1 Hz/px at 1000 lx and
+# <= 10 Hz/px at 5 lx (Sony IMX636-AAMR-C flyer). With an 8 mm lens the horizontal FOV is
+# 2*atan(1280*4.86e-3/2/8) = 42.5 deg (24.6 deg vertical).
+IMX636 = dict(width=1280, height=720, pixel_um=4.86, lens_mm=8.0)
+
+
+def imx636_hfov_deg(lens_mm=8.0):
+    return math.degrees(2 * math.atan(1280 * 4.86e-3 / 2 / lens_mm))
+
+
+def imx636_camera(noise_rate_hz=0.1, refractory_us=1000, lens_mm=8.0, seed=0):
+    return EventCamera(width=1280, height=720, fov_deg=imx636_hfov_deg(lens_mm), noise_rate_hz=noise_rate_hz,
+                       seed=seed, refractory_us=refractory_us)
 
 
 def world_to_cam(p_obj_ned, p_drone_ned, q_body_to_ned):

@@ -346,3 +346,56 @@ fn test_canfd_frame_roundtrip_and_crc() {
     bad[6] ^= 0xFF;
     assert!(ReflexFrame::decode(&bad).is_err());
 }
+
+#[test]
+fn test_farfield_tau_and_miss() {
+    use giantfiber_core::farfield::{FarFieldConfig, FarFieldTtc};
+    // Head-on: image radius r(t) = f R / (d0 - v t), centred, events on the expanding edge.
+    let f = 1645.0f32; let rr = 0.15f32; let d0 = 30.0f32; let v = 10.0f32;
+    let mut ff = Box::new(FarFieldTtc::new(FarFieldConfig::default()));
+    let mut armed_at = None;
+    let mut prev_r = f * rr / d0;
+    for k in 0..1400u64 {
+        let t = k * 2000;
+        let d = d0 - v * t as f32 * 1e-6;
+        if d < 1.0 { break; }
+        let r = f * rr / d;
+        // one event per pixel crossed on the circle perimeter, plus a ring sample every step
+        let n = ((2.0 * core::f32::consts::PI * r) as usize).max(16);
+        let grow = r - prev_r;
+        prev_r = r;
+        let reps = if grow > 0.05 || k % 4 == 0 { 1 } else { 0 };
+        for _ in 0..reps {
+            for i in 0..n {
+                let a = i as f32 / n as f32 * 2.0 * core::f32::consts::PI;
+                let x = 640.0 + r * a.cos();
+                let y = 360.0 + r * a.sin();
+                ff.feed(x as u16, y as u16, t + 1 + (i as u64 % 1999));
+            }
+        }
+        let o = ff.eval(t + 2000);
+        if o.armed == 1 && armed_at.is_none() {
+            let ttc = d / v;
+            armed_at = Some((ttc, o.tau_s, o.miss_radii));
+        }
+    }
+    let (ttc, tau, miss) = armed_at.expect("far-field stage should arm on a head-on approach");
+    assert!(ttc > 0.6 && ttc < 1.1, "armed at true TTC {ttc}");
+    assert!((tau - ttc).abs() < 0.2, "tau {tau} vs true {ttc}");
+    assert!(miss < 1.0, "head-on miss {miss}");
+}
+
+#[test]
+fn test_farfield_noise_only_never_arms() {
+    use giantfiber_core::farfield::{FarFieldConfig, FarFieldTtc};
+    let mut ff = Box::new(FarFieldTtc::new(FarFieldConfig::default()));
+    let mut s: u64 = 12345;
+    for k in 0..2000u64 {
+        let t = k * 2000;
+        for _ in 0..184 { // 0.1 Hz/px over 1280x720 for 2 ms
+            s ^= s << 13; s ^= s >> 7; s ^= s << 17;
+            ff.feed((s % 1280) as u16, ((s >> 20) % 720) as u16, t + (s >> 40) % 2000);
+        }
+        assert_eq!(ff.eval(t + 2000).armed, 0);
+    }
+}

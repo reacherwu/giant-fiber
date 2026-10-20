@@ -20,6 +20,7 @@ pub mod connectome;
 pub mod calibrator;
 pub mod persistence;
 pub mod canfd;
+pub mod farfield;
 
 use types::{EventSpike, ImuData, ReflexOutput, EngineConfig};
 use accumulator::EventAccumulator;

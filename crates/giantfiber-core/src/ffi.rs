@@ -219,3 +219,54 @@ pub unsafe extern "C" fn gf_canfd_encode(output: *const ReflexOutput, sequence: 
 pub extern "C" fn gf_surface_size() -> u32 {
     crate::accumulator::SURFACE_WIDTH as u32
 }
+
+// ---- Far-field time-to-contact stage (see farfield.rs) ----
+use crate::farfield::{FarFieldConfig, FarFieldOutput, FarFieldTtc};
+
+/// # Safety
+/// `cfg` must be null or point to a valid `FarFieldConfig`.
+#[no_mangle]
+pub unsafe extern "C" fn gf_ff_new(cfg: *const FarFieldConfig) -> *mut FarFieldTtc {
+    let c = cfg.as_ref().copied().unwrap_or_default();
+    // Allocate on the heap directly (the ring buffer is a few hundred KB)
+    let mut b: Box<core::mem::MaybeUninit<FarFieldTtc>> = Box::new_uninit();
+    b.as_mut_ptr().write(FarFieldTtc::new(c));
+    Box::into_raw(b.assume_init())
+}
+
+/// # Safety
+/// `ff` must come from `gf_ff_new`.
+#[no_mangle]
+pub unsafe extern "C" fn gf_ff_free(ff: *mut FarFieldTtc) {
+    if !ff.is_null() { drop(Box::from_raw(ff)); }
+}
+
+/// # Safety
+/// `ff` from `gf_ff_new`; `events` points to `n` valid spikes (sensor-resolution coordinates).
+#[no_mangle]
+pub unsafe extern "C" fn gf_ff_feed(ff: *mut FarFieldTtc, events: *const EventSpike, n: usize) -> i32 {
+    match (ff.as_mut(), events.is_null()) {
+        (Some(f), false) => {
+            for e in core::slice::from_raw_parts(events, n) { f.feed(e.x, e.y, e.timestamp_us); }
+            0
+        }
+        _ => -1,
+    }
+}
+
+/// # Safety
+/// `ff` from `gf_ff_new`; `out` valid.
+#[no_mangle]
+pub unsafe extern "C" fn gf_ff_eval(ff: *mut FarFieldTtc, now_us: u64, out: *mut FarFieldOutput) -> i32 {
+    match (ff.as_mut(), out.as_mut()) {
+        (Some(f), Some(o)) => { *o = f.eval(now_us); 0 }
+        _ => -1,
+    }
+}
+
+/// # Safety
+/// `ff` from `gf_ff_new`.
+#[no_mangle]
+pub unsafe extern "C" fn gf_ff_reset(ff: *mut FarFieldTtc) {
+    if let Some(f) = ff.as_mut() { f.reset(); }
+}
