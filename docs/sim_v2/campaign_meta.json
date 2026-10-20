@@ -1,0 +1,50 @@
+{
+  "started_unix": 1792454604.5187633,
+  "finished_unix": 1792460028.6849475,
+  "args": {
+    "url": "udpin:0.0.0.0:14540",
+    "out": "docs/sim_v2",
+    "speeds": "6,10,14",
+    "az": "-15,0,15",
+    "el": "0,8",
+    "dist": "15,25",
+    "aim_err": 0.1,
+    "reps": 3,
+    "baseline_reps": 2,
+    "fly_reps": 1,
+    "legacy_reps": 1,
+    "controls": 20,
+    "arms": "reflex:drone2v:3,reflex:drone2:1,baseline:drone2v:2",
+    "control_cfg": "drone2v",
+    "noise_hz": 0.3,
+    "seed": 2,
+    "limit": 0
+  },
+  "r_obj": 0.15,
+  "r_vehicle": 0.25,
+  "hover_alt": 10.0,
+  "loop_dt": 0.002,
+  "presets": {
+    "fly": {},
+    "drone": {
+      "fov_deg": 60.0,
+      "lplc2_half_size_deg": 4.0,
+      "lc4_half_velocity_dps": 20.0
+    },
+    "drone2": {
+      "fov_deg": 60.0,
+      "lplc2_half_size_deg": 1.5,
+      "lc4_half_velocity_dps": 5.0
+    },
+    "drone2v": {
+      "fov_deg": 60.0,
+      "lplc2_half_size_deg": 1.5,
+      "lc4_half_velocity_dps": 5.0,
+      "_bridge": {
+        "escape_policy": "vertical",
+        "evade_duration_s": 0.8
+      }
+    }
+  },
+  "gt_samples": 1048484
+}

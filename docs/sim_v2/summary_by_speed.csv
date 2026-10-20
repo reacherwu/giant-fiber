@@ -1,0 +1,10 @@
+group,speed_mps,n,hits,hit_rate,hit_ci_lo,hit_ci_hi,detection_rate,median_trigger_ttc_ms,median_response_ms,median_min_dist_m
+no reflex (baseline),6.0,24,14,0.5833,0.3883,0.7553,1.0,410.3,,0.356
+no reflex (baseline),10.0,24,16,0.6667,0.4671,0.8203,0.9167,272.4,,0.321
+no reflex (baseline),14.0,24,23,0.9583,0.7976,0.9926,1.0,146.6,,0.16549999999999998
+"reflex v2 detection, lateral escape",6.0,12,3,0.25,0.0889,0.5323,0.9167,445.4,185.9,0.7095
+"reflex v2 detection, lateral escape",10.0,12,7,0.5833,0.3195,0.8067,1.0,217.4,192.0,0.3
+"reflex v2 detection, lateral escape",14.0,12,11,0.9167,0.6461,0.9851,0.9167,125.8,178.3,0.198
+"reflex v2 detection, vertical escape",6.0,36,8,0.2222,0.1172,0.3809,0.9722,409.9,72.3,0.737
+"reflex v2 detection, vertical escape",10.0,36,21,0.5833,0.422,0.7286,0.9722,264.7,72.6,0.294
+"reflex v2 detection, vertical escape",14.0,36,31,0.8611,0.7134,0.9392,0.8889,160.55,72.85,0.191

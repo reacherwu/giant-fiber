@@ -12,8 +12,10 @@ Python SDK, a PX4 offboard bridge, a CAN-FD frame and a Verilog prototype of the
 
 > **Status: research prototype.** Everything below was measured in simulation: synthetic events
 > and PX4 SITL. Nothing has been flown, run on real event-camera data, or measured on embedded
-> hardware, and no power figure exists. In the PX4 SITL campaign the reflex did **not** reduce
-> collisions; see [the results](#px4-sitl-incoming-object-campaign).
+> hardware, and no power figure exists. In the first PX4 SITL campaign the reflex did **not** reduce
+> collisions. In the second (v2: slow-edge detection channel + thrust-axis escape) it lowered the
+> collision rate from 73.6% to 55.6%, with most of the gain at 6 m/s and almost none at 14 m/s; see
+> [the results](#px4-sitl-campaign-v2-detection-range--escape-tuning).
 
 ---
 
@@ -65,7 +67,58 @@ geometric event synthesis, 5 seeds per condition):
 
 ![validation](docs/model/looming_validation.png)
 
-## PX4 SITL incoming-object campaign
+## PX4 SITL campaign v2 (detection range + escape tuning)
+
+Same SITL setup, geometry and collision test as the first campaign below. 256 trials,
+2026-10-19 17:03 to about 18:35 PDT, `docs/sim_v2/`. Command:
+`run_campaign.py --arms reflex:drone2v:3,reflex:drone2:1,baseline:drone2v:2 --controls 20 --control-cfg drone2v --seed 2 --out docs/sim_v2`.
+
+**What changed (commit 3be046b).**
+- *Slow-edge channel* in the looming estimator. At long range the disk edge moves well under one
+  cell per ms, so the 4 ms / ≥2-event rule found almost no edge cells. When the fast channel finds
+  fewer than 3 cells, a fallback uses cells with ≥3 events in a 32 ms window (with the same
+  8-neighbour noise filter).
+- *Lower thresholds* (preset `drone2`: LPLC2 half-size 1.5°, LC4 half-velocity 5°/s). These were
+  chosen offline on head-on synthetic approaches, not on the SITL geometries.
+- *Thrust-axis escape* (preset `drone2v`, `escape_policy="vertical"`, held 0.8 s). In a PX4 SITL
+  step-response test (`docs/sim_v2/step_response.json`, 2 repeats per command), climbing moved the
+  vehicle 0.20–0.31 m in 0.3 s, against 0.05–0.10 m for a sideways command. Lateral moves have to
+  tilt the vehicle first. Asking for more than 9 m/s² barely helped, because the vehicle saturates.
+- An experimental `grid128` feature (128×128 surface) did **not** extend the range offline at the
+  same camera resolution, so the campaign uses 64×64. One test fails under it, and it is not in CI.
+
+| arm | trials | collisions | collision rate [95% CI] | triggered | median trigger distance | median TTC at trigger | median response |
+|---|---|---|---|---|---|---|---|
+| no reflex (baseline) | 72 | 53 | **73.6%** [62.4, 82.4] | 70 | 2.72 m | 253 ms | – |
+| v2 detection, lateral escape | 36 | 21 | 58.3% [42.2, 72.9] | 34 | 2.67 m | 235 ms | 186 ms |
+| v2 detection, vertical escape | 108 | 60 | **55.6%** [46.2, 64.6] | 102 | 2.79 m | 257 ms | **73 ms** |
+
+| speed | baseline | vertical escape |
+|---|---|---|
+| 6 m/s | 14/24 (58%) | 8/36 (22%) [12, 38] |
+| 10 m/s | 16/24 (67%) | 21/36 (58%) |
+| 14 m/s | 23/24 (96%) | 31/36 (86%) |
+
+Controls: 0/20 false triggers on 8 s hovers with no object, and 0/20 on fly-bys.
+
+**Reading the result honestly.**
+- Overall the drop is 18 points (two-proportion z ≈ 2.4). The 95% CIs still overlap slightly
+  (64.6% vs 62.4%), so this is a clear drop but not a non-overlapping one. At 6 m/s the CIs do not overlap.
+- Detection range went from 2.11 m (v1 drone preset) to 2.79 m median (TTC 168 → 257 ms).
+- The bigger gain came from the actuation side: switching to a thrust-axis escape cut the response
+  from 186 to 73 ms.
+- **Physical limit.** Clearing the 0.40 m hit radius takes about 0.35–0.4 s even when climbing
+  (step test). At 14 m/s the median trigger is only about 160 ms before contact. Getting there would
+  need detection at about 5.5 m, i.e. roughly twice the current range. With this sensor model
+  (320 px, 60° FOV, 0.30 m object), the expansion at that distance is below about one pixel per
+  30 ms. Getting there needs a higher-resolution or narrower-FOV sensor, or a cue other than
+  expansion. It is not a parameter-tuning problem.
+- Held-out protocol: the thresholds were chosen on offline head-on runs and the escape on the step
+  test. Neither was tuned on these campaign trials, and this campaign was run once.
+
+![v2 collision rate by speed](docs/sim_v2/collision_rate_by_speed.png)
+
+## PX4 SITL incoming-object campaign (v1, history)
 
 **Setup.**
 - PX4 v1.15.4, SIH quadrotor (`sihsim_quadx`), headless, real-time, offboard mode, hovering at 10 m.

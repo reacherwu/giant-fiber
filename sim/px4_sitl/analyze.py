@@ -50,10 +50,14 @@ def stats(x):
 
 def group_label(arm, cfg):
     return {("reflex", "drone"): "reflex (drone preset)", ("baseline", "drone"): "no reflex (baseline)",
-            ("reflex", "fly"): "reflex (fly preset)", ("legacy", "drone"): "legacy attitude cmd"}.get((arm, cfg), f"{arm}/{cfg}")
+            ("reflex", "fly"): "reflex (fly preset)", ("legacy", "drone"): "legacy attitude cmd",
+            ("baseline", "drone2v"): "no reflex (baseline)",
+            ("reflex", "drone2"): "reflex v2 detection, lateral escape",
+            ("reflex", "drone2v"): "reflex v2 detection, vertical escape"}.get((arm, cfg), f"{arm}/{cfg}")
 
 
-GROUP_ORDER = [("baseline", "drone"), ("reflex", "drone"), ("reflex", "fly"), ("legacy", "drone")]
+GROUP_ORDER = [("baseline", "drone"), ("reflex", "drone"), ("reflex", "fly"), ("legacy", "drone"),
+               ("baseline", "drone2v"), ("reflex", "drone2"), ("reflex", "drone2v")]
 
 
 def summarize(df):
