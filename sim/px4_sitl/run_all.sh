@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# One-command reproduction of the PX4 SITL campaign in docs/sim/.
+# One-command reproduction of the v1 (history) PX4 SITL campaign in docs/sim/.
+# The current results (v4, docs/sim_v4) are reproduced by sim/px4_sitl/run_v4.sh; `V4=1` forwards there.
 #
 #   bash sim/px4_sitl/run_all.sh [extra run_campaign.py args, e.g. --limit 20]
 #
@@ -12,6 +13,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+if [ "${V4:-0}" = 1 ]; then exec bash "$REPO/sim/px4_sitl/run_v4.sh"; fi
 PX4_DIR="${PX4_DIR:-$HOME/px4/PX4-Autopilot}"
 OUT="${OUT:-$REPO/docs/sim}"
 PYTHON="${PYTHON:-python3}"

@@ -11,6 +11,7 @@ from .types import (
     ReflexConfig,
 )
 from .engine import GiantFiberCoprocessor
+from .envelope import VALIDATED_MAX_CLOSING_SPEED_MPS, OutsideEnvelopeWarning, check_threat_speed
 
 __version__ = "0.2.0"
 __all__ = [
@@ -23,4 +24,7 @@ __all__ = [
     "EventSpike",
     "EventPacket",
     "ReflexConfig",
+    "VALIDATED_MAX_CLOSING_SPEED_MPS",
+    "OutsideEnvelopeWarning",
+    "check_threat_speed",
 ]

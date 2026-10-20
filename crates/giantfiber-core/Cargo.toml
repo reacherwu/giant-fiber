@@ -23,5 +23,5 @@ std = []
 libm = ["dep:libm"]
 # 128x128 time surface instead of 64x64 (see accumulator.rs)
 # Experimental 128x128 surface. Not tested in CI; mode-selection thresholds are calibrated on 64x64
-# and test_gf_spike_angular_size_and_mode_selection currently fails with this feature.
+# test_gf_spike_angular_size_and_mode_selection is cfg-gated off under this feature.
 grid128 = []

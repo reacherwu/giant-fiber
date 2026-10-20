@@ -21,6 +21,57 @@ Python SDK, a PX4 offboard bridge, a CAN-FD frame and a Verilog prototype of the
 
 ---
 
+## Safety envelope
+
+**Validated range: closing speed ≤ 30 m/s, in simulation only.** This has not been flight-tested or
+run on a real sensor.
+
+| Condition | Value |
+|---|---|
+| Closing speed | 6–30 m/s (validated tiers: 6, 10, 14, 20, 30) |
+| Object | 0.30 m diameter sphere |
+| Threat cone | approach direction within ±15° azimuth, ±8° elevation of the camera axis; aim error ≤ 0.15 m |
+| Sensor | simulated Sony/Prophesee IMX636 (1280x720, contrast threshold, 1 ms refractory, 0.1 Hz/px background activity, 2 ms latency) |
+| Rig | 8 mm lens (42.5° HFOV) plus a 3x3 grid of 25 mm tiles at yaw −12/0/+12°, pitch −7/0/+7° (`giantfiber.envelope.DEFAULT_RIG`) |
+| Vehicle | PX4 v1.15.4 SIH quadrotor (`sihsim_quadx`), offboard thrust-axis escape at 20 m/s² for 1.2 s |
+| Detection config | far-field TTC defaults in `giantfiber.envelope.DEFAULT_FARFIELD` |
+
+Evidence comes from the held-out campaign v4 (new seeds, one run, no tuning on it):
+- **Collisions:** 0/66 per tier at 6, 10, 14, 20 and 30 m/s. The Wilson 95% CI upper bound is 5.5% per
+  tier.
+- **False triggers:** 0/198 (66 hover, 66 sensor noise, 66 flyby).
+- **Baseline:** without the reflex, 22/30 of the matching threat trials collided.
+
+**Outside the envelope:**
+
+| Speed | Collision rate [95% CI] |
+|---|---|
+| 60 m/s | 7.6% [3.3, 16.5] |
+| 90 m/s | 4.5% [1.6, 12.5] |
+| 120 m/s | 21.2% [13.1, 32.5] |
+
+The measured rule is that an escape succeeded whenever the far-field stage armed at least 0.5 s before
+contact: 0 collisions in 141 such trials. Above 30 m/s, the rig cannot reliably resolve the object's
+expansion that early. This is a detection limit, not a vehicle-dynamics limit.
+
+The code exposes the envelope:
+- Python: `giantfiber.VALIDATED_MAX_CLOSING_SPEED_MPS` and `giantfiber.check_threat_speed()`, which
+  raises `OutsideEnvelopeWarning` above 30 m/s.
+- Rust: `giantfiber_core::VALIDATED_MAX_CLOSING_SPEED_MPS`.
+
+**Hardware BOM (estimated, not built):**
+- 10 IMX636 board-level modules, for example the CenturyArks SilkyEvCam HD: 12 g each without lens,
+  about 0.26 W average.
+- M12 lenses: 1 x 8 mm and 9 x 25 mm.
+- Total roughly 200 g plus the mount, and about 3 W.
+- Price: no module price is published. As a reference, the Prophesee EVK4 HD evaluation camera costs
+  US$5,450, so ten would be about US$55k.
+- Compute needs a SoC with CSI aggregation for 10 two-lane MIPI streams.
+
+The rig suits a larger airframe rather than a small quad.
+
+Reproduce with `bash sim/px4_sitl/run_v4.sh` (or `V4=1 bash sim/px4_sitl/run_all.sh`).
+
 ## What it does
 
 ```

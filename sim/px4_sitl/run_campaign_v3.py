@@ -286,6 +286,9 @@ def main():
     args = ap.parse_args()
     import ast
     args.ff_over = ast.literal_eval(args.ff_cfg)
+    from giantfiber.envelope import check_threat_speed
+    for v in args.tiers.split(","):
+        check_threat_speed(float(v))  # warns for tiers outside the validated envelope (used here to measure it)
     rng = random.Random(args.seed)
     plan = build_plan(args, rng)
     if args.limit:

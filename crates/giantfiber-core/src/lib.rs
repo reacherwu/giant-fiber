@@ -179,3 +179,10 @@ impl GiantFiberEngine {
 
 #[cfg(feature = "std")]
 pub mod ffi;
+
+/// Highest closing speed (m/s) validated in simulation (PX4 SITL campaign v4: 0/66 collisions per tier
+/// at 6-30 m/s, 95% CI upper bound 5.5%, 0/198 false triggers). Not flight-tested. Above this speed the
+/// measured collision rate was 4.5-21.2%, because detection could not arm the required 0.5 s before contact.
+pub const VALIDATED_MAX_CLOSING_SPEED_MPS: f32 = 30.0;
+/// Minimum lead time (s) between arming and contact that produced zero collisions in v4.
+pub const REQUIRED_LEAD_TIME_S: f32 = 0.5;
