@@ -51,6 +51,12 @@ PRESETS = {
     "fly": dict(),
     # Same circuit, thresholds scaled down for a 60 deg camera so it fires earlier (documented in README)
     "drone": dict(fov_deg=60.0, lplc2_half_size_deg=4.0, lc4_half_velocity_dps=20.0),
+    # v2 (2026-10-19 PM): lower angular thresholds, chosen offline on head-on synthetic approaches
+    # (tools/validation/detection_range.py), not on these SITL geometries.
+    "drone2": dict(fov_deg=60.0, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0),
+    # v2 detection + thrust-axis escape held for 0.8 s (chosen from the SITL step-response test)
+    "drone2v": dict(fov_deg=60.0, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0,
+                    _bridge=dict(escape_policy="vertical", evade_duration_s=0.8)),
 }
 
 
@@ -150,8 +156,10 @@ def unit_from_az_el(az_deg, el_deg):
 
 
 def run_trial(veh, arm, cfg_name, trial, out_dir, rng, noise_hz, trace=True):
-    cfg = ReflexConfig(**PRESETS[cfg_name])
-    bridge = PX4ReflexBridge(PX4BridgeConfig(reflex_config=cfg))
+    preset = dict(PRESETS[cfg_name])
+    bridge_kw = preset.pop("_bridge", {})
+    cfg = ReflexConfig(**preset)
+    bridge = PX4ReflexBridge(PX4BridgeConfig(reflex_config=cfg, **bridge_kw))
     cam = EventCamera(fov_deg=cfg.fov_deg, noise_rate_hz=noise_hz, seed=rng.randrange(1 << 30))
     settled = veh.settle()
     p_launch_drone, _, q0 = veh.pose_now()
@@ -298,8 +306,12 @@ def build_plan(args, rng):
     azs = [float(x) for x in args.az.split(",")]
     els = [float(x) for x in args.el.split(",")]
     dists = [float(x) for x in args.dist.split(",")]
-    for arm, cfg_name, reps in [("reflex", "drone", args.reps), ("baseline", "drone", args.baseline_reps),
-                                ("reflex", "fly", args.fly_reps), ("legacy", "drone", args.legacy_reps)]:
+    if args.arms:
+        arms = [(a, c, int(r)) for a, c, r in (x.split(":") for x in args.arms.split(","))]
+    else:
+        arms = [("reflex", "drone", args.reps), ("baseline", "drone", args.baseline_reps),
+                ("reflex", "fly", args.fly_reps), ("legacy", "drone", args.legacy_reps)]
+    for arm, cfg_name, reps in arms:
         for r in range(reps):
             for v in speeds:
                 for az in azs:
@@ -310,8 +322,8 @@ def build_plan(args, rng):
                                              aim_err_m=round(math.sqrt(rng.random()) * args.aim_err, 3)))
                             i += 1
     for r in range(args.controls):
-        plan.append(dict(id=f"{i:04d}", kind="no_object", arm="reflex", cfg="drone", duration_s=8.0)); i += 1
-        plan.append(dict(id=f"{i:04d}", kind="flyby", arm="reflex", cfg="drone", speed_mps=rng.choice(speeds),
+        plan.append(dict(id=f"{i:04d}", kind="no_object", arm="reflex", cfg=args.control_cfg, duration_s=8.0)); i += 1
+        plan.append(dict(id=f"{i:04d}", kind="flyby", arm="reflex", cfg=args.control_cfg, speed_mps=rng.choice(speeds),
                          az_deg=rng.choice(azs), el_deg=0.0, dist_m=rng.choice(dists),
                          miss_m=round(rng.uniform(2.5, 4.0), 2))); i += 1
     rng.shuffle(plan)
@@ -332,6 +344,8 @@ def main():
     ap.add_argument("--fly-reps", type=int, default=1)
     ap.add_argument("--legacy-reps", type=int, default=1)
     ap.add_argument("--controls", type=int, default=30)
+    ap.add_argument("--arms", default="", help="comma list arm:preset:reps (overrides the default arms)")
+    ap.add_argument("--control-cfg", default="drone")
     ap.add_argument("--noise-hz", type=float, default=0.3)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--limit", type=int, default=0, help="run only the first N planned trials (smoke test)")

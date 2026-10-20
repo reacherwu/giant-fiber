@@ -280,6 +280,11 @@ class PX4BridgeConfig:
     accel_short_mode: float = 9.0             # m/s^2, GF short-mode escape
     accel_long_mode: float = 5.0              # m/s^2, non-GF long-mode escape
     evade_duration_s: float = 0.5             # how long the acceleration setpoint is streamed
+    # "reflex": direction straight from the reflex vector (lateral away from the stimulus by default).
+    # "vertical": thrust-axis escape (climb, or descend when the reflex vector says descend). A
+    # multirotor changes collective thrust without first tilting, so in the measured PX4 SITL step
+    # responses (docs/sim/step_response.json) it moves ~2-4x further in the first 0.3-0.4 s.
+    escape_policy: str = "reflex"
     reflex_config: ReflexConfig = field(default_factory=ReflexConfig)
 
 
@@ -293,6 +298,8 @@ def escape_acceleration_ned(decision: ReflexDecision, yaw_rad: float, cfg: "PX4B
     a = cfg.accel_short_mode if decision.escape_mode == EscapeMode.SHORT else cfg.accel_long_mode
     lat = decision.vector.x
     vert = decision.vector.y
+    if cfg.escape_policy == "vertical":
+        lat, vert = 0.0, (-1.0 if vert < 0.0 else 1.0)
     n = math.hypot(lat, vert) or 1.0
     lat, vert = lat / n, vert / n
     # body right axis in NED for heading yaw: (-sin(yaw), cos(yaw), 0)

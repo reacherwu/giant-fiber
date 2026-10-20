@@ -1,7 +1,7 @@
 //! GiantFiber core (GF-1): an event-camera looming-escape reflex.
 //!
 //! Pipeline per evaluation step:
-//! events -> 64x64 time surface -> looming estimate (angular size, expansion rate)
+//! events -> 64x64 (or 128x128, feature `grid128`) time surface -> looming estimate (angular size, expansion rate)
 //! -> LPLC2 / LC4 population activity -> Giant Fiber (DNp01) + non-GF descending pathway
 //! (weights from FlyWire v783 synapse counts) -> short/long escape mode -> discrete action.
 //!
@@ -138,7 +138,7 @@ impl GiantFiberEngine {
         snapshot.serialize(buffer)
     }
 
-    /// Restores the scalar engine state. The time surface itself (64x64 timestamps) is not part of
+    /// Restores the scalar engine state. The time surface itself (timestamps) is not part of
     /// the snapshot, so recent events are lost on restore.
     pub fn restore_snapshot(&mut self, buffer: &[u8]) -> Result<(), &'static str> {
         let snapshot = EngineSnapshot::deserialize(buffer)?;

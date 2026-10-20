@@ -309,8 +309,8 @@ fn test_accumulator_off_polarity_decay() {
     acc.feed_spike(&spike_off, 320, 320);
 
     // Surface value at center should be negative (-1.0 decayed), NOT 0.0
-    let sx = (160 * 64) / 320;
-    let sy = (160 * 64) / 320;
+    let sx = (160 * giantfiber_core::accumulator::SURFACE_WIDTH) / 320;
+    let sy = (160 * giantfiber_core::accumulator::SURFACE_HEIGHT) / 320;
     let val = acc.get_surface_value(sx, sy);
     assert!(val < -0.9, "OFF event should produce negative decaying surface, got {}", val);
 }

@@ -6,16 +6,24 @@
 //! encode -- angular size theta and its rate dtheta/dt -- from the edge of the object, i.e. from
 //! the time-surface cells that received an event within the last `EDGE_WINDOW_US`.
 
-use crate::accumulator::{EventAccumulator, SURFACE_HEIGHT, SURFACE_WIDTH};
+use crate::accumulator::{EventAccumulator, SLOW_WINDOW_US, SURFACE_HEIGHT, SURFACE_WIDTH};
 use crate::math::{acosf, sqrtf, tanf};
 
-const _: () = assert!(SURFACE_WIDTH == 64, "row bitmaps assume a 64-cell-wide surface");
+/// One bit per surface cell in a row.
+#[cfg(not(feature = "grid128"))]
+type Row = u64;
+#[cfg(feature = "grid128")]
+type Row = u128;
+const _: () = assert!(SURFACE_WIDTH == Row::BITS as usize, "row bitmap width must equal the surface width");
 
 /// Cells whose last event is younger than this belong to the current object edge.
 pub const EDGE_WINDOW_US: u64 = 4000;
 /// A cell counts as edge only if it received at least this many events in its current burst
 /// (a moving edge flips several pixels of a 5x5 cell; isolated noise events rarely do).
 pub const MIN_CELL_EVENTS: u8 = 2;
+/// Slow-edge channel: a cell is an edge cell if it received at least this many events in its
+/// current `SLOW_WINDOW_US` window (used only when the fast channel finds too few cells).
+pub const SLOW_MIN_EVENTS: u8 = 3;
 /// Minimum time between two angular-size samples used for dtheta/dt.
 pub const MIN_DERIV_DT_US: u64 = 1000;
 
@@ -27,7 +35,7 @@ pub struct LoomingEstimate {
     pub theta_deg: f32,
     /// Smoothed angular expansion rate in degrees per second
     pub theta_dot_dps: f32,
-    /// Stimulus centroid on the 64x64 surface
+    /// Stimulus centroid on the time surface (cells)
     pub centroid_x: f32,
     pub centroid_y: f32,
     /// Fraction of edge cells in the left half of the image (left eye)
@@ -105,21 +113,20 @@ impl LoomingEstimator {
         acosf((dot / n).clamp(-1.0, 1.0)).to_degrees()
     }
 
-    pub fn update(&mut self, acc: &EventAccumulator, now_us: u64, fov_deg: f32, min_edge_cells: u32) -> LoomingEstimate {
-        let horizon = now_us.saturating_sub(EDGE_WINDOW_US);
-        // Active-cell bitmap, one u64 per row (SURFACE_WIDTH == 64)
-        let mut rows = [0u64; SURFACE_HEIGHT];
+    /// Active-cell bitmap from a per-cell predicate, keeping only cells with an active 8-neighbour
+    /// (object edges are contiguous, isolated sensor-noise events mostly are not; engineering
+    /// filter, not biology).
+    fn edge_cells(acc: &EventAccumulator, active: impl Fn(u64, usize, usize) -> bool) -> [Row; SURFACE_HEIGHT] {
+        let mut rows: [Row; SURFACE_HEIGHT] = [0; SURFACE_HEIGHT];
         for (y, row) in rows.iter_mut().enumerate() {
             for x in 0..SURFACE_WIDTH {
                 let t = acc.last_timestamp[y][x];
-                if t != 0 && t >= horizon && acc.burst_count[y][x] >= MIN_CELL_EVENTS {
-                    *row |= 1u64 << x;
+                if t != 0 && active(t, y, x) {
+                    *row |= (1 as Row) << x;
                 }
             }
         }
-        // Keep only cells with at least one active 8-neighbour: object edges are contiguous,
-        // isolated sensor-noise events mostly are not (engineering filter, not biology).
-        let mut kept = [0u64; SURFACE_HEIGHT];
+        let mut kept: [Row; SURFACE_HEIGHT] = [0; SURFACE_HEIGHT];
         for y in 0..SURFACE_HEIGHT {
             let r = rows[y];
             let up = if y > 0 { rows[y - 1] } else { 0 };
@@ -127,6 +134,23 @@ impl LoomingEstimator {
             let vert = up | dn;
             let neigh = (r << 1) | (r >> 1) | vert | (vert << 1) | (vert >> 1);
             kept[y] = r & neigh;
+        }
+        kept
+    }
+
+    pub fn update(&mut self, acc: &EventAccumulator, now_us: u64, fov_deg: f32, min_edge_cells: u32) -> LoomingEstimate {
+        // Fast channel: recent bursts (near / fast-expanding objects)
+        let horizon = now_us.saturating_sub(EDGE_WINDOW_US);
+        let mut kept = Self::edge_cells(acc, |t, y, x| {
+            t >= horizon && acc.burst_count[y][x] >= MIN_CELL_EVENTS
+        });
+        let fast_n: u32 = kept.iter().map(|r| r.count_ones()).sum();
+        if fast_n < min_edge_cells.max(3) {
+            // Slow channel: events integrated over SLOW_WINDOW_US (far / slowly expanding objects)
+            let slow_horizon = now_us.saturating_sub(SLOW_WINDOW_US);
+            kept = Self::edge_cells(acc, |t, y, x| {
+                t >= slow_horizon && acc.win_start[y][x] >= slow_horizon && acc.win_count[y][x] >= SLOW_MIN_EVENTS
+            });
         }
         // Pass 1: centroid of kept edge cells
         let (mut n, mut sx, mut sy, mut nl) = (0u32, 0.0f32, 0.0f32, 0u32);

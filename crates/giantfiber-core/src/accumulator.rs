@@ -6,10 +6,18 @@
 use crate::types::EventSpike;
 use crate::math::{expf, sqrtf};
 
+/// Time-surface resolution. 64x64 by default; the `grid128` feature selects 128x128
+/// (longer detection range for small/far objects, 4x the surface memory: ~164 KB vs ~41 KB).
+#[cfg(not(feature = "grid128"))]
 pub const SURFACE_WIDTH: usize = 64;
-pub const SURFACE_HEIGHT: usize = 64;
+#[cfg(feature = "grid128")]
+pub const SURFACE_WIDTH: usize = 128;
+pub const SURFACE_HEIGHT: usize = SURFACE_WIDTH;
 /// A cell's burst counter restarts if it was silent for longer than this.
 pub const BURST_GAP_US: u64 = 4000;
+/// Window of the slow-edge counter (see `looming.rs`): far objects expand by well under one
+/// pixel per millisecond, so their edges are only visible when events are integrated longer.
+pub const SLOW_WINDOW_US: u64 = 32000;
 
 /// Bounded Constant-Memory Receptive Field Time Surface.
 pub struct EventAccumulator {
@@ -19,6 +27,9 @@ pub struct EventAccumulator {
     pub(crate) polarity_surface: [[i8; SURFACE_WIDTH]; SURFACE_HEIGHT],
     /// Events received by each cell since its last quiet gap of more than `BURST_GAP_US`
     pub(crate) burst_count: [[u8; SURFACE_WIDTH]; SURFACE_HEIGHT],
+    /// Start of the cell's current slow-counter window and the events counted in it
+    pub(crate) win_start: [[u64; SURFACE_WIDTH]; SURFACE_HEIGHT],
+    pub(crate) win_count: [[u8; SURFACE_WIDTH]; SURFACE_HEIGHT],
     /// Global latest timestamp
     pub current_time_us: u64,
     /// Time constant tau in microseconds for exponential decay
@@ -43,6 +54,8 @@ impl EventAccumulator {
             last_timestamp: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
             polarity_surface: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
             burst_count: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
+            win_start: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
+            win_count: [[0; SURFACE_WIDTH]; SURFACE_HEIGHT],
             current_time_us: 0,
             tau_us: if tau_us > 0.0 { tau_us } else { 25000.0 },
             centroid_x: (SURFACE_WIDTH as f32) / 2.0,
@@ -60,6 +73,8 @@ impl EventAccumulator {
         self.last_timestamp = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
         self.polarity_surface = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
         self.burst_count = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
+        self.win_start = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
+        self.win_count = [[0; SURFACE_WIDTH]; SURFACE_HEIGHT];
         self.current_time_us = 0;
         self.centroid_x = (SURFACE_WIDTH as f32) / 2.0;
         self.centroid_y = (SURFACE_HEIGHT as f32) / 2.0;
@@ -71,7 +86,7 @@ impl EventAccumulator {
     }
 
     /// Feed a single event spike. Quantizes raw sensor coordinates (e.g. 320x320)
-    /// into the bounded 64x64 surface.
+    /// into the bounded SURFACE_WIDTH x SURFACE_HEIGHT surface.
     #[inline(always)]
     pub fn feed_spike(&mut self, spike: &EventSpike, raw_width: u16, raw_height: u16) {
         if spike.timestamp_us > self.current_time_us {
@@ -89,6 +104,13 @@ impl EventAccumulator {
         } else {
             self.burst_count[sy][sx].saturating_add(1)
         };
+        let ws = self.win_start[sy][sx];
+        if ws == 0 || spike.timestamp_us.saturating_sub(ws) > SLOW_WINDOW_US {
+            self.win_start[sy][sx] = spike.timestamp_us.max(1);
+            self.win_count[sy][sx] = 1;
+        } else {
+            self.win_count[sy][sx] = self.win_count[sy][sx].saturating_add(1);
+        }
         self.last_timestamp[sy][sx] = spike.timestamp_us;
         self.polarity_surface[sy][sx] = if spike.polarity == 0 { -1 } else { spike.polarity };
         self.recent_event_count = self.recent_event_count.saturating_add(1);

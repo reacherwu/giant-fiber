@@ -170,6 +170,9 @@ class GiantFiberCoreBinding:
         self.lib.gf_get_debug_state.argtypes = [c_void_p, POINTER(C_GfDebugState)]
         self.lib.gf_get_debug_state.restype = c_int32
 
+        self.lib.gf_surface_size.argtypes = []
+        self.lib.gf_surface_size.restype = c_uint32
+
         # gf_canfd_encode(output, sequence, timestamp_ms, out[24]) -> i32
         self.lib.gf_canfd_encode.argtypes = [POINTER(C_ReflexOutput), c_uint16, c_uint32, POINTER(c_uint8)]
         self.lib.gf_canfd_encode.restype = c_int32

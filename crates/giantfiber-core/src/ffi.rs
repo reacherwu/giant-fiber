@@ -213,3 +213,9 @@ pub unsafe extern "C" fn gf_canfd_encode(output: *const ReflexOutput, sequence: 
     core::ptr::copy_nonoverlapping(frame.as_ptr(), out, frame.len());
     frame.len() as i32
 }
+
+/// Side length of the internal time surface (64, or 128 with the `grid128` feature).
+#[no_mangle]
+pub extern "C" fn gf_surface_size() -> u32 {
+    crate::accumulator::SURFACE_WIDTH as u32
+}

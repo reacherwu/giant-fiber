@@ -300,7 +300,7 @@ impl GiantFiberCircuit {
     }
 
     fn latch_direction(&mut self, est: &LoomingEstimate) {
-        let half = 32.0f32;
+        let half = crate::accumulator::SURFACE_WIDTH as f32 * 0.5;
         let ox = (est.centroid_x - half) / half; // +: stimulus on the right
         let oy = (est.centroid_y - half) / half; // +: stimulus below the optical axis
         // Move away from the stimulus. Centred stimulus: default to the right.
