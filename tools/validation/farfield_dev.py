@@ -6,7 +6,7 @@ uses different seeds and randomised geometry."""
 import argparse, json, math, sys, os
 import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from giantfiber.sim.events import imx636_camera, world_to_cam, quat_to_rot  # noqa: E402
+from giantfiber.sim.events import imx636_camera, world_to_cam, quat_to_rot, mount_rotation  # noqa: E402
 from giantfiber.farfield import FarFieldTTC, FarFieldConfig, Derotator  # noqa: E402
 
 HIT = 0.40
@@ -23,9 +23,19 @@ def quat(roll, pitch, yaw):
 def run(kind, v, dist, az, el, offset, R, noise, seed, cfg, jitter_deg=0.5, latency_us=2000, lens_mm=8.0):
     rng = np.random.default_rng(seed)
     lenses = lens_mm if isinstance(lens_mm, (list, tuple)) else [lens_mm]
-    cams = [imx636_camera(noise_rate_hz=noise, seed=seed + 7919 * j, lens_mm=L) for j, L in enumerate(lenses)]
+    # lens spec "25@yaw:pitch" = 25 mm camera yawed / pitched (deg)
+    specs = []
+    for L in lenses:
+        Ls = str(L)
+        if "@" in Ls:
+            f_, m = Ls.split("@"); yw, pt = (float(z) for z in m.split(":"))
+            specs.append((float(f_), mount_rotation(yw, pt)))
+        else:
+            specs.append((float(Ls), mount_rotation(0, 0)))
+    cams = [imx636_camera(noise_rate_hz=noise, seed=seed + 7919 * j, lens_mm=L) for j, (L, _) in enumerate(specs)]
+    mounts = [m for _, m in specs]
     ffs = [FarFieldTTC(cfg) for _ in cams]
-    ders = [Derotator(c.width, c.height, c.fov_deg) for c in cams]
+    ders = [Derotator(c.width, c.height, c.fov_deg, R_cb=m) for c, m in zip(cams, mounts)]
     for d_ in ders:
         d_.set_reference(np.eye(3))
     u = np.array([math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), -math.sin(el)])
@@ -41,23 +51,23 @@ def run(kind, v, dist, az, el, offset, R, noise, seed, cfg, jitter_deg=0.5, late
     bufs = [[] for _ in cams]
     first = None
     if kind != "noise":
-        for c in cams:
-            c.prime(world_to_cam(start, np.zeros(3), quat(0, 0, 0)), R)
+        for c, m in zip(cams, mounts):
+            c.prime(world_to_cam(start, np.zeros(3), quat(0, 0, 0), m), R)
     for k in range(int(T * 1e6 / DT)):
         t = k * DT
         ang = [math.radians(jitter_deg) * math.sin(2 * math.pi * fr[i] * t * 1e-6 + ph[i]) for i in range(3)]
         q = quat(*ang)
         p_d = np.array([0.05 * math.sin(t * 1e-6 * 1.3 + ph[0]), 0.05 * math.sin(t * 1e-6 * 0.9 + ph[1]), 0.0])
         if kind == "noise":
-            p_cam, d = None, float("inf")
+            p_cams, d = [None] * len(cams), float("inf")
         else:
             p_o = start + vel * t * 1e-6
             d = float(np.linalg.norm(p_o - p_d))
-            p_cam = world_to_cam(p_o, p_d, q)
+            p_cams = [world_to_cam(p_o, p_d, q, m) for m in mounts]
         now = t + DT
         Rq = quat_to_rot(q)
         outs = []
-        for c, ff, der, buf in zip(cams, ffs, ders, bufs):
+        for c, ff, der, buf, p_cam in zip(cams, ffs, ders, bufs, p_cams):
             buf.append(der.apply(c.step(p_cam, R, t + 1, DT), Rq))
             while buf and (len(buf[0]) == 0 or int(buf[0]["timestamp_us"].max()) + latency_us <= now):
                 ff.feed(buf.pop(0))
@@ -90,7 +100,7 @@ def main():
     a = ap.parse_args()
     cfg = FarFieldConfig(**eval(a.cfg))
     D = [float(x) for x in a.dist.split(",")]
-    a.lens = [float(x) for x in a.lens.split(",")]
+    a.lens = a.lens.split(",")
     out = dict(cfg=cfg.__dict__, threats={}, flyby=[], noise=[])
     speeds = [float(x) for x in a.speeds.split(",")]
     for v in speeds:

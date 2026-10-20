@@ -27,11 +27,15 @@ from pymavlink import mavutil  # noqa: E402
 from run_campaign import Vehicle, unit_from_az_el, HIT_DIST, R_OBJ, HOVER_ALT  # noqa: E402
 from giantfiber import GiantFiberCoprocessor, ReflexConfig  # noqa: E402
 from giantfiber.farfield import FarFieldTTC, FarFieldConfig, Derotator  # noqa: E402
-from giantfiber.sim.events import imx636_camera, world_to_cam, quat_to_rot  # noqa: E402
+from giantfiber.sim.events import imx636_camera, world_to_cam, quat_to_rot, mount_rotation  # noqa: E402
 from giantfiber.filters import BackgroundActivityFilter  # noqa: E402
 
 LOOP_DT = 0.002
 LENSES_MM = (8.0, 25.0)
+# Camera rigs: list of (lens_mm, yaw_deg, pitch_deg). "dual" was the first held-out run; "tiled" adds
+# overlapping 25 mm cameras (yaw -12/0/+12, pitch +-3.5) covering about +-19 x +-7.5 deg.
+RIGS = {"dual": [(8.0, 0.0, 0.0), (25.0, 0.0, 0.0)],
+        "tiled": [(8.0, 0.0, 0.0)] + [(25.0, y, p) for p in (3.5, -3.5) for y in (-12.0, 0.0, 12.0)]}
 FF_CFG = dict(tau_arm_s=1.0, min_fit_span_us=150000, min_t_stat=8.0, confirm_evals=15, max_miss_radii=6.0, tau_min_s=0.15)
 GF_PRESET = dict(fov_deg=42.5, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0)
 LATENCY_US = 2000
@@ -42,6 +46,9 @@ class V3Vehicle(Vehicle):
     def __init__(self, url):
         super().__init__(url)
         self.att_q = None
+        # Keep the simulated battery full. In the first v3 run, PX4's simulated battery failsafe
+        # landed two of the three vehicles after ~2 h (those trials are excluded in analyze_v3.py).
+        self.m.mav.param_set_send(self.tsys, 1, b"SIM_BAT_MIN_PCT", 100.0, mavutil.mavlink.MAV_PARAM_TYPE_REAL32)
         self.m.mav.command_long_send(self.tsys, 1, mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0, 31, int(1e6 / 250), 0, 0, 0, 0, 0)
 
     def poll(self):
@@ -84,9 +91,11 @@ def accel_sp(climb, a):
 def run_trial(veh, trial, rng, args, out_dir):
     kind, arm = trial["kind"], trial["arm"]
     noise = trial.get("noise_hz", args.noise_hz)
-    cams = [imx636_camera(noise_rate_hz=noise, refractory_us=1000, lens_mm=L, seed=rng.randrange(1 << 30)) for L in LENSES_MM]
+    rig = RIGS[args.rig]
+    cams = [imx636_camera(noise_rate_hz=noise, refractory_us=1000, lens_mm=L, seed=rng.randrange(1 << 30)) for L, _, _ in rig]
+    mounts = [mount_rotation(y, p) for _, y, p in rig]
     ffs = [FarFieldTTC(FarFieldConfig(**FF_CFG)) for _ in cams]
-    ders = [Derotator(c.width, c.height, c.fov_deg) for c in cams]
+    ders = [Derotator(c.width, c.height, c.fov_deg, R_cb=m) for c, m in zip(cams, mounts)]
     bufs = [[] for _ in cams]
     gf = GiantFiberCoprocessor(ReflexConfig(**GF_PRESET))
     baf = BackgroundActivityFilter(1280, 720, BAF_US)
@@ -112,8 +121,8 @@ def run_trial(veh, trial, rng, args, out_dir):
         target = p0 + mag * (math.cos(ang) * perp + math.sin(ang) * up)
         vel = (target - start) / np.linalg.norm(target - start) * trial["speed_mps"]
         duration = trial["dist_m"] / trial["speed_mps"] + 1.0
-        for c in cams:
-            c.prime(world_to_cam(start, p0, q0), R_OBJ)
+        for c, m in zip(cams, mounts):
+            c.prime(world_to_cam(start, p0, q0, m), R_OBJ)
     else:
         duration = trial["duration_s"]
     t0 = time.perf_counter()
@@ -143,16 +152,16 @@ def run_trial(veh, trial, rng, args, out_dir):
             prev_rel = rel
             if d < min_d:
                 min_d, t_min = d, t
-            p_cam = world_to_cam(p_o, p_d, q_d)
+            p_cams = [world_to_cam(p_o, p_d, q_d, m) for m in mounts]
             d_now = float(np.linalg.norm(rel))
         else:
-            p_cam, d_now = None, float("nan")
+            p_cams, d_now = [None] * len(cams), float("nan")
         R_est = quat_to_rot(veh.att_q or q_d)
         now_us = ts + int(LOOP_DT * 1e6)
         outs = []
         compute_us = 0.0
         for j, (c, ff, der, buf) in enumerate(zip(cams, ffs, ders, bufs)):
-            ev = c.step(p_cam, R_OBJ, ts + 1, int(LOOP_DT * 1e6))
+            ev = c.step(p_cams[j], R_OBJ, ts + 1, int(LOOP_DT * 1e6))
             if j == 0 and len(ev):
                 gev = baf.apply(ev)
                 if len(gev):
@@ -176,7 +185,7 @@ def run_trial(veh, trial, rng, args, out_dir):
                 o = outs[0]
                 climb = dec.vector.y >= 0.0
             trig = dict(t=t, dist=d_now, src=src, tau=o["tau_s"], miss=o["miss_radii"], climb=int(climb),
-                        cam=int(LENSES_MM[outs.index(o)]) if armed else 8, compute_us=compute_us)
+                        cam=outs.index(o) if armed else 0, compute_us=compute_us)
             if arm == "reflex":
                 acc = accel_sp(climb, args.accel)
                 escape_until = t + args.escape_s
@@ -197,8 +206,8 @@ def run_trial(veh, trial, rng, args, out_dir):
                 max_tau_seen = max(max_tau_seen, 0.0)
         if k % 5 == 0:
             rows.append([round(t, 4), *np.round(p_d, 3), *(np.round(p_o, 3) if start is not None else ["", "", ""]),
-                         round(outs[0]["tau_s"], 3), round(outs[1]["tau_s"], 3), round(outs[0]["r_px"], 2), round(outs[1]["r_px"], 2),
-                         int(outs[0]["armed"]), int(outs[1]["armed"]), int(dec.triggered), round(compute_us, 1)])
+                         round(outs[0]["tau_s"], 3), round(min(o["tau_s"] for o in outs[1:]), 3), round(outs[0]["r_px"], 2),
+                         round(max(o["r_px"] for o in outs[1:]), 2), int(outs[0]["armed"]), int(any(o["armed"] for o in outs[1:])), int(dec.triggered), round(compute_us, 1)])
         k += 1
         sl = LOOP_DT - (time.perf_counter() - ls)
         if sl > 0:
@@ -207,7 +216,7 @@ def run_trial(veh, trial, rng, args, out_dir):
     res = {kk: v for kk, v in trial.items()}
     v = trial.get("speed_mps")
     res.update(settled=int(settled), triggered=int(trig is not None),
-               trigger_src=trig["src"] if trig else "", trigger_cam_mm=trig["cam"] if trig else "",
+               trigger_src=trig["src"] if trig else "", trigger_cam=trig["cam"] if trig else "", rig=args.rig,
                trigger_t_s=round(trig["t"], 4) if trig else "",
                trigger_dist_m=round(trig["dist"], 3) if trig and start is not None else "",
                trigger_ttc_ms=round((trig["dist"] - HIT_DIST) / v * 1e3, 1) if trig and start is not None else "",
@@ -219,8 +228,8 @@ def run_trial(veh, trial, rng, args, out_dir):
     os.makedirs(os.path.join(out_dir, "traces"), exist_ok=True)
     with gzip.open(os.path.join(out_dir, "traces", f"{trial['id']}.csv.gz"), "wt", newline="") as f:
         wr = csv.writer(f)
-        wr.writerow(["t", "drone_n", "drone_e", "drone_d", "obj_n", "obj_e", "obj_d", "tau_8mm", "tau_25mm",
-                     "r_8mm", "r_25mm", "armed_8mm", "armed_25mm", "gf_trig", "compute_us"])
+        wr.writerow(["t", "drone_n", "drone_e", "drone_d", "obj_n", "obj_e", "obj_d", "tau_8mm", "tau_25mm_min",
+                     "r_8mm", "r_25mm_max", "armed_8mm", "armed_25mm_any", "gf_trig", "compute_us"])
         wr.writerows(rows)
     return res
 
@@ -269,6 +278,7 @@ def main():
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--shard", default="s0")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--rig", default="dual", choices=sorted(RIGS))
     args = ap.parse_args()
     rng = random.Random(args.seed)
     plan = build_plan(args, rng)
@@ -293,7 +303,7 @@ def main():
         with open(os.path.join(out_dir, "trials.csv"), "w", newline="") as f:
             wr = csv.DictWriter(f, fieldnames=keys); wr.writeheader(); wr.writerows(results)
     with open(os.path.join(out_dir, "campaign_meta.json"), "w") as f:
-        json.dump(dict(started_unix=t_start, finished_unix=time.time(), args=vars(args), lenses_mm=LENSES_MM,
+        json.dump(dict(started_unix=t_start, finished_unix=time.time(), args=vars(args), rig=RIGS[args.rig],
                        ff_cfg=FF_CFG, gf_preset=GF_PRESET, baf_us=BAF_US, gf_gate='t_stat>4 and 0<tau<2 s on either camera', latency_us=LATENCY_US, loop_dt=LOOP_DT,
                        r_obj=R_OBJ, hit_dist=HIT_DIST), f, indent=2)
 

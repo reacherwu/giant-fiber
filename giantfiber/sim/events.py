@@ -119,24 +119,40 @@ class EventCamera:
         mask[y0:y1, x0:x1] = sub
         return mask, pr
 
+    def _disk_box(self, p_cam, radius):
+        pr = self.project_sphere(p_cam, radius) if p_cam is not None else None
+        if pr is None:
+            return None, None
+        u, v, r = pr
+        if u + r < 0 or u - r > self.width or v + r < 0 or v - r > self.height:
+            return None, None
+        x0, x1 = max(0, int(u - r - 1)), min(self.width, int(u + r + 2))
+        y0, y1 = max(0, int(v - r - 1)), min(self.height, int(v + r + 2))
+        if x1 <= x0 or y1 <= y0:
+            return None, None
+        return (y0, y1, x0, x1), (u, v, r)
+
     def step(self, p_cam, radius, t0_us: int, dt_us: int):
-        """Advance one step; returns a numpy array with EVENT_DTYPE."""
-        new = np.zeros_like(self.prev) if self.prev_box is None else self.prev.copy()
-        if self.prev_box is not None:
-            y0, y1, x0, x1 = self.prev_box
-            new[y0:y1, x0:x1] = False
-        box = self._draw(new, p_cam, radius)
+        """Advance one step; returns a numpy array with EVENT_DTYPE. Only the bounding box of the
+        previous and the new disk is touched (no full-frame copies)."""
+        box, pr = self._disk_box(p_cam, radius)
         boxes = [b for b in (box, self.prev_box) if b is not None]
         if boxes:
             y0 = min(b[0] for b in boxes); y1 = max(b[1] for b in boxes)
             x0 = min(b[2] for b in boxes); x1 = max(b[3] for b in boxes)
-            changed = new[y0:y1, x0:x1] ^ self.prev[y0:y1, x0:x1]
-            ys, xs = np.nonzero(changed)
+            old = self.prev[y0:y1, x0:x1]
+            if pr is not None:
+                u, v, r = pr
+                newr = (self.xx[y0:y1, x0:x1] - u) ** 2 + (self.yy[y0:y1, x0:x1] - v) ** 2 <= r * r
+            else:
+                newr = np.zeros_like(old)
+            ys, xs = np.nonzero(newr ^ old)
+            pol = np.where(newr[ys, xs], -1, 1).astype(np.int8)
             ys = ys + y0; xs = xs + x0
+            self.prev[y0:y1, x0:x1] = newr
         else:
             ys = xs = np.zeros(0, dtype=np.int64)
-        pol = np.where(new[ys, xs], -1, 1).astype(np.int8)
-        self.prev = new
+            pol = np.zeros(0, dtype=np.int8)
         self.prev_box = box
         n_obj = len(xs)
         n_noise = 0
@@ -182,8 +198,23 @@ def imx636_camera(noise_rate_hz=0.1, refractory_us=1000, lens_mm=8.0, seed=0):
                        seed=seed, refractory_us=refractory_us)
 
 
-def world_to_cam(p_obj_ned, p_drone_ned, q_body_to_ned):
-    """Object position in camera coordinates (X right, Y down, Z forward) for a forward camera."""
+R_CB_FORWARD = np.array([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])  # columns: cam x, y, z in body FRD
+
+
+def mount_rotation(yaw_deg=0.0, pitch_deg=0.0):
+    """Camera->body rotation for a camera yawed right by `yaw_deg` and pitched up by `pitch_deg`."""
+    y, p = math.radians(yaw_deg), math.radians(pitch_deg)
+    Rz = np.array([[math.cos(y), -math.sin(y), 0.0], [math.sin(y), math.cos(y), 0.0], [0.0, 0.0, 1.0]])
+    Ry = np.array([[math.cos(p), 0.0, math.sin(p)], [0.0, 1.0, 0.0], [-math.sin(p), 0.0, math.cos(p)]])
+    return Rz @ Ry @ R_CB_FORWARD
+
+
+def world_to_cam(p_obj_ned, p_drone_ned, q_body_to_ned, R_cb=None):
+    """Object position in camera coordinates (X right, Y down, Z forward); forward camera unless
+    `R_cb` (camera->body rotation, see `mount_rotation`) is given."""
     R = quat_to_rot(q_body_to_ned)
     pb = R.T @ (np.asarray(p_obj_ned) - np.asarray(p_drone_ned))  # body FRD
-    return (pb[1], pb[2], pb[0])
+    if R_cb is None:
+        return (pb[1], pb[2], pb[0])
+    pc = R_cb.T @ pb
+    return (pc[0], pc[1], pc[2])

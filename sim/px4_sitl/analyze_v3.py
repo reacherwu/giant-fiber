@@ -19,8 +19,37 @@ def wilson(k, n, z=1.96):
     return (max(0.0, (c - h) / d), min(1.0, (c + h) / d))
 
 
+def landed_cutoff(shard_dir, ids):
+    """Index of the first trial at which PX4's battery failsafe had started a descent: the start altitude
+    rises monotonically over the next 5 trials. That trial and all later ones in the shard are excluded."""
+    z = []
+    for tid in ids:
+        tr = pd.read_csv(os.path.join(shard_dir, "traces", f"{tid}.csv.gz"), nrows=1)
+        z.append(float(tr.drone_d.iloc[0]) if len(tr) else float("nan"))
+    cut = len(z)
+    for i in range(len(z) - 5):
+        if all(z[j + 1] > z[j] + 0.05 for j in range(i, i + 5)):
+            cut = i
+            break
+    # ... or the vehicle never again starts a trial at hover altitude (below -10.5 m NED in the gt frame)
+    for i in range(len(z)):
+        if all(zz > -10.5 for zz in z[i:]):
+            cut = min(cut, i)
+            break
+    # conservative: also drop the trial before the detected onset
+    return max(0, cut - 1) if cut < len(z) else cut, z
+
+
 def load(d):
-    df = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(d, "s*", "trials.csv")))], ignore_index=True)
+    parts = []
+    excl = {}
+    for f in sorted(glob.glob(os.path.join(d, "*", "trials.csv"))):
+        t = pd.read_csv(f)
+        cut, _ = landed_cutoff(os.path.dirname(f), list(t["id"]))
+        excl[os.path.basename(os.path.dirname(f))] = int(len(t) - cut)
+        parts.append(t.iloc[:cut])
+    df = pd.concat(parts, ignore_index=True)
+    df.attrs["excluded_after_failsafe"] = excl
     df["shard_dir"] = df["id"].str.split("-").str[0]
     for c in ["trigger_t_s", "t_min_s", "trigger_ttc_ms", "min_dist_m", "hit", "speed_mps", "response_ms", "compute_us", "trigger_dist_m"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -72,8 +101,8 @@ def plot_rates(tt, path):
     sp = sorted(tt.speed_mps.unique()); x = np.arange(len(sp))
     for j, (arm, col) in enumerate((("baseline", "#999"), ("reflex", "#1f77b4"))):
         g = tt[tt.arm == arm].set_index("speed_mps").loc[sp]
-        ax.bar(x + (j - 0.5) * 0.38, g.rate * 100, 0.38, color=col, label=f"{arm} (n per tier: {int(g.n.iloc[0])})",
-               yerr=[(g.rate - g.ci_lo) * 100, (g.ci_hi - g.rate) * 100], capsize=3)
+        ax.bar(x + (j - 0.5) * 0.38, g.rate * 100, 0.38, color=col, label=f"{arm} (n per tier: {int(g.n.min())}-{int(g.n.max())})",
+               yerr=[((g.rate - g.ci_lo) * 100).clip(lower=0), ((g.ci_hi - g.rate) * 100).clip(lower=0)], capsize=3)
     ax.axhline(5, color="g", ls="--", lw=1, label="target 5%")
     ax.set_xticks(x, [f"{int(s)}" for s in sp]); ax.set_xlabel("object speed (m/s)"); ax.set_ylabel("collision rate (%)")
     ax.set_title("PX4 SITL v3 (held-out): collision rate per speed tier, 95% Wilson CI"); ax.legend(fontsize=8)
@@ -136,7 +165,7 @@ def main():
     tt.to_csv(os.path.join(a.dir, "summary_by_tier.csv"), index=False)
     ctl = controls(df)
     th = df[(df.kind == "threat") & (df.arm == "reflex") & df.pre_ca_trigger]
-    summary = dict(n_trials=len(df), tiers=tt.to_dict("records"), controls=ctl,
+    summary = dict(n_trials=len(df), excluded_after_battery_failsafe=df.attrs.get("excluded_after_failsafe"), tiers=tt.to_dict("records"), controls=ctl,
                    compute_us_median=float(th.compute_us.median()), compute_us_p95=float(th.compute_us.quantile(0.95)),
                    response_ms_median=float(th.response_ms.median()), loop_hz_median=float(df.loop_hz.median()),
                    loop_hz_min=float(df.loop_hz.min()), settled_fraction=float(df.settled.mean()))

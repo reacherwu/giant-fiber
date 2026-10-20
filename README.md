@@ -12,10 +12,11 @@ Python SDK, a PX4 offboard bridge, a CAN-FD frame and a Verilog prototype of the
 
 > **Status: research prototype.** Everything below was measured in simulation: synthetic events
 > and PX4 SITL. Nothing has been flown, run on real event-camera data, or measured on embedded
-> hardware, and no power figure exists. In the first PX4 SITL campaign the reflex did **not** reduce
-> collisions. In the second (v2: slow-edge detection channel + thrust-axis escape) it lowered the
-> collision rate from 73.6% to 55.6%, with most of the gain at 6 m/s and almost none at 14 m/s; see
-> [the results](#px4-sitl-campaign-v2-detection-range--escape-tuning).
+> hardware. In the final held-out PX4 SITL campaign (v3, simulated IMX636 + far-field TTC stage) the
+> reflex had 0 collisions at 6, 10, 14 and 20 m/s (95% CI upper bound 4.2–4.6%) and 0 false triggers on
+> the dual rig. It does **not** meet the bar at 30–120 m/s: 5–25% collisions with the tiled rig, all
+> off-axis. See [the v3 results](#px4-sitl-campaign-v3-final-held-out-imx636-camera--far-field-ttc-stage).
+> Earlier campaigns (v1: no improvement; v2: 73.6% to 55.6%) are kept as history.
 
 ---
 
@@ -67,7 +68,85 @@ geometric event synthesis, 5 seeds per condition):
 
 ![validation](docs/model/looming_validation.png)
 
-## PX4 SITL campaign v2 (detection range + escape tuning)
+## PX4 SITL campaign v3 (final held-out: IMX636 camera + far-field TTC stage)
+
+**Setup.** Simulated Prophesee IMX636 sensor (1280x720, 4.86 µm pixels, contrast threshold, 1 ms
+refractory period, 0.1 Hz/px background activity, 2 ms latency). Two rigs:
+- **dual**: one 8 mm lens (42.5° HFOV) plus one 25 mm lens on axis.
+- **tiled**: one 8 mm lens plus six 25 mm lenses (yaw −12/0/+12°, pitch ±3.5°). This rig was chosen on
+  dev seeds and evaluated only on the 30–120 m/s tiers.
+
+A far-field TTC stage (`farfield.rs`) arms a thrust-axis escape (20 m/s², 1.2 s). It uses block
+clustering, a circle fit, a 1/r regression for tau and a miss-distance prediction, on derotated events.
+The connectome GF stage stays as the near-field trigger, gated by a far-field track. A 2 ms
+background-activity filter runs on the GF input. Collisions are tested by segment closest approach
+against a 0.40 m radius. Objects start 80–150 m away at the 30–120 m/s tiers. The control loop ran at
+a median of about 470 Hz, and compute took a median of 93–143 µs per step.
+
+All thresholds were frozen on dev seeds (<10000) before these runs. The seeds used here (404–1616)
+were never used for tuning.
+
+### Results (collision rate, Wilson 95% CI)
+
+| Speed | Rig | Reflex n | Reflex collisions | Rate [95% CI] | Baseline | Median TTC at trigger | Meets bar (≤5%, upper ≤10%)? |
+|---|---|---|---|---|---|---|---|
+| 6 m/s | dual | 82 | 0 | 0.0% [0.0, 4.5] | 6/13 | 1118 ms | **yes** |
+| 10 m/s | dual | 84 | 0 | 0.0% [0.0, 4.4] | 12/13 | 923 ms | **yes** |
+| 14 m/s | dual | 87 | 0 | 0.0% [0.0, 4.2] | 10/14 | 873 ms | **yes** |
+| 20 m/s | dual | 79 | 0 | 0.0% [0.0, 4.6] | 16/16 | 681 ms | **yes** |
+| 30 m/s | dual | 65 | 6 | 9.2% [4.3, 18.7] | 12/12 | 508 ms | no |
+| 30 m/s | tiled | 60 | 3 | 5.0% [1.7, 13.7] | 4/6 | 935 ms | no (upper bound) |
+| 60 m/s | dual | 65 | 36 | 55.4% [43.3, 66.8] | 8/12 | 221 ms | no |
+| 60 m/s | tiled | 60 | 5 | 8.3% [3.6, 18.1] | 5/6 | 854 ms | no |
+| 90 m/s | dual | 63 | 51 | 81.0% [69.6, 88.8] | 8/8 | 91 ms | no |
+| 90 m/s | tiled | 60 | 8 | 13.3% [6.9, 24.2] | 3/6 | 670 ms | no |
+| 120 m/s | dual | 64 | 50 | 78.1% [66.6, 86.5] | 11/11 | 77 ms | no |
+| 120 m/s | tiled | 60 | 15 | 25.0% [15.8, 37.2] | 6/6 | 449 ms | no |
+
+The baseline arms run the same detection with no escape, so they show how many draws were on a
+collision course. Every collision in the reflex arms at ≥30 m/s happened with the object
+**outside the central 25 mm field of view**: 0 collisions among the in-FOV approaches. The limit is
+angular resolution off-axis, not vehicle dynamics. With ~0.9 s of lead time the quad climbs well past
+the 0.40 m radius.
+
+**False triggers (no-threat controls).**
+- **dual:** 0/77 hover, 0/81 sensor noise, 0/81 flyby.
+- **tiled:** 0/60 hover, 0/60 noise, **1/60 flyby**. That flyby was at 60 m/s with a 2.68 m miss
+  distance, and it triggered 1.44 s before closest approach. The tiled rig therefore does not meet the
+  0-false-trigger bar.
+
+### Disclosures
+- **Aborted run 1.** The first launch of the final campaign (82 trials) was stopped because the GF stage
+  false-triggered on 5 of 10 no-object hover trials. The fix was the background-activity filter plus the
+  far-field gate on GF. The campaign was then relaunched with new seeds, and run 1 is not counted above.
+- **Battery failsafe exclusion.** In run 2, shards s0 and s1 hit PX4's simulated battery failsafe, and
+  the vehicle landed. Trials from one before the detected landing onward were excluded: 26 from s0 and
+  23 from s1. The `landed_cutoff` function in `analyze_v3.py` does this. Top-up shards t0–t2 and w3–w5
+  then ran with `SIM_BAT_MIN_PCT=100`.
+- **Rig choice.** The tiled rig was introduced after the dual-rig results at 60–120 m/s were seen. It was
+  selected on dev seeds and then evaluated once on fresh seeds (u0–u2). It was not tuned on these trials.
+
+![collision rate dual](docs/sim_v3/collision_rate_by_tier.png)
+![collision rate tiled](docs/sim_v3_tiled/collision_rate_by_tier.png)
+![trigger TTC](docs/sim_v3/trigger_ttc_by_speed.png)
+
+Footage from the reflex and baseline arms:
+
+| 10 m/s evasion | 10 m/s baseline hit | 60 m/s evasion (tiled) | 120 m/s hit (tiled) |
+|---|---|---|---|
+| ![](docs/sim_v3/evasion_10mps.gif) | ![](docs/sim_v3/baseline_hit_10mps.gif) | ![](docs/sim_v3_tiled/evasion_60mps.gif) | ![](docs/sim_v3_tiled/hit_120mps.gif) |
+
+**Safe envelope (measured).**
+- **6–20 m/s:** meets the bar with the dual rig, for the sampled object sizes and approach angles.
+- **30 m/s:** borderline.
+- **60–120 m/s:** dodged reliably only inside the narrow high-resolution FOV. Off-axis, the trigger
+  comes later for some draws (p10 TTC at trigger 270–500 ms on the tiled rig). Those late draws are
+  near or below the ~0.35–0.4 s the climb needs, and they are where the collisions occur.
+
+Wider coverage at 25 mm-class resolution, meaning more tiles or a higher-resolution sensor, is the
+remaining lever. Tuning the escape is not.
+
+## PX4 SITL campaign v2 (detection range + escape tuning, history)
 
 Same SITL setup, geometry and collision test as the first campaign below. 256 trials,
 2026-10-19 17:03 to about 18:35 PDT, `docs/sim_v2/`. Command:

@@ -61,8 +61,10 @@ class Derotator:
     """
     R_CB = np.array([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])  # columns: cam x,y,z in body
 
-    def __init__(self, width, height, fov_deg):
+    def __init__(self, width, height, fov_deg, R_cb=None):
         import math
+        if R_cb is not None:
+            self.R_CB = np.asarray(R_cb)
         self.w, self.h = width, height
         self.f = (width / 2) / math.tan(math.radians(fov_deg) / 2)
         self.cx, self.cy = width / 2, height / 2
