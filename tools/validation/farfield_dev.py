@@ -20,8 +20,9 @@ def quat(roll, pitch, yaw):
     return (cr * cp * cy + sr * sp * sy, sr * cp * cy - cr * sp * sy, cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy)
 
 
-def run(kind, v, dist, az, el, offset, R, noise, seed, cfg, jitter_deg=0.5, latency_us=2000, lens_mm=8.0):
+def run(kind, v, dist, az, el, offset, R, noise, seed, cfg, jitter_deg=0.5, latency_us=2000, lens_mm=8.0, drift=0.0):
     rng = np.random.default_rng(seed)
+    vd = rng.normal(size=3); vd *= drift / max(1e-9, np.linalg.norm(vd))  # unsettled-drone drift (m/s)
     lenses = lens_mm if isinstance(lens_mm, (list, tuple)) else [lens_mm]
     # lens spec "25@yaw:pitch" = 25 mm camera yawed / pitched (deg)
     specs = []
@@ -57,7 +58,7 @@ def run(kind, v, dist, az, el, offset, R, noise, seed, cfg, jitter_deg=0.5, late
         t = k * DT
         ang = [math.radians(jitter_deg) * math.sin(2 * math.pi * fr[i] * t * 1e-6 + ph[i]) for i in range(3)]
         q = quat(*ang)
-        p_d = np.array([0.05 * math.sin(t * 1e-6 * 1.3 + ph[0]), 0.05 * math.sin(t * 1e-6 * 0.9 + ph[1]), 0.0])
+        p_d = np.array([0.05 * math.sin(t * 1e-6 * 1.3 + ph[0]), 0.05 * math.sin(t * 1e-6 * 0.9 + ph[1]), 0.0]) + vd * t * 1e-6
         if kind == "noise":
             p_cams, d = [None] * len(cams), float("inf")
         else:
@@ -97,6 +98,8 @@ def main():
     ap.add_argument("--lens", default="8", help="lens focal length(s) in mm, comma list = one IMX636 per lens")
     ap.add_argument("--az", type=float, default=15.0)
     ap.add_argument("--el", type=float, default=8.0)
+    ap.add_argument("--drift", type=float, default=0.0, help="constant drone drift speed (m/s), random direction")
+    ap.add_argument("--nfly", type=int, default=-1, help="number of flyby controls (default: --n)")
     a = ap.parse_args()
     cfg = FarFieldConfig(**eval(a.cfg))
     D = [float(x) for x in a.dist.split(",")]
@@ -108,24 +111,24 @@ def main():
         for i in range(a.n):
             rng = np.random.default_rng(a.seed0 + 100 * i + int(v))
             res.append(run("threat", v, rng.uniform(*D), math.radians(rng.uniform(-a.az, a.az)), math.radians(rng.uniform(-a.el, a.el)),
-                           rng.uniform(0, 0.15), a.R, a.noise, a.seed0 + i, cfg, a.jitter, lens_mm=a.lens))
+                           rng.uniform(0, 0.15), a.R, a.noise, a.seed0 + i, cfg, a.jitter, lens_mm=a.lens, drift=a.drift))
         ttc = [r["true_ttc"] for r in res if r]
         out["threats"][v] = res
         print(f"v={v:4.0f} armed {len(ttc)}/{len(res)} true TTC at arm (s): "
-              f"min {min(ttc) if ttc else float('nan'):.3f} median {np.median(ttc) if ttc else float('nan'):.3f} "
+              f"min {min(ttc) if ttc else float('nan'):.3f} p10 {np.percentile(ttc, 10) if ttc else float('nan'):.3f} median {np.median(ttc) if ttc else float('nan'):.3f} "
               f"dist median {np.median([r['dist'] for r in res if r]) if ttc else float('nan'):.2f} m", flush=True)
     fb = 0
-    for i in range(a.n):
+    for i in range(a.nfly if a.nfly >= 0 else a.n):
         rng = np.random.default_rng(a.seed0 + 7000 + i)
         v = float(rng.choice(speeds))
-        r = run("flyby", v, rng.uniform(*D), math.radians(rng.uniform(-15, 15)), 0.0, rng.uniform(2.5, 4.0), a.R, a.noise, a.seed0 + 50 + i, cfg, a.jitter, lens_mm=a.lens)
+        r = run("flyby", v, rng.uniform(*D), math.radians(rng.uniform(-a.az, a.az)), math.radians(rng.uniform(-a.el, a.el)), rng.uniform(2.5, 6.0), a.R, a.noise, a.seed0 + 50 + i, cfg, a.jitter, lens_mm=a.lens, drift=a.drift)
         out["flyby"].append(r); fb += bool(r)
     nz = 0
     nn = max(2, a.n // 4)
     for i in range(nn):
         r = run("noise", 1, 0, 0, 0, 0, a.R, a.noise, a.seed0 + 90 + i, cfg, a.jitter, lens_mm=a.lens)
         out["noise"].append(r); nz += bool(r)
-    print(f"flyby false arms {fb}/{a.n}  noise false arms {nz}/{nn}", flush=True)
+    print(f"flyby false arms {fb}/{a.nfly if a.nfly >= 0 else a.n}  noise false arms {nz}/{nn}", flush=True)
     if a.json:
         json.dump(out, open(a.json, "w"), indent=1, default=float)
 

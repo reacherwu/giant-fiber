@@ -1,0 +1,95 @@
+{
+  "started_unix": 1792482159.4198935,
+  "finished_unix": 1792485550.213346,
+  "args": {
+    "instance": 5,
+    "out": "docs/sim_v4",
+    "tiers": "6,10,14,20,30,60,90,120",
+    "n_reflex": 11,
+    "n_baseline": 1,
+    "controls": 11,
+    "noise_hz": 0.1,
+    "noise_control_hz": 1.0,
+    "accel": 20.0,
+    "escape_s": 1.2,
+    "settle_min": 3.0,
+    "settle_max": 60.0,
+    "seed": 2006,
+    "shard": "x5",
+    "limit": 0,
+    "ff_cfg": "{}",
+    "rig": "tiled9",
+    "ff_over": {}
+  },
+  "rig": [
+    [
+      8.0,
+      0.0,
+      0.0
+    ],
+    [
+      25.0,
+      -12.0,
+      7.0
+    ],
+    [
+      25.0,
+      0.0,
+      7.0
+    ],
+    [
+      25.0,
+      12.0,
+      7.0
+    ],
+    [
+      25.0,
+      -12.0,
+      0.0
+    ],
+    [
+      25.0,
+      0.0,
+      0.0
+    ],
+    [
+      25.0,
+      12.0,
+      0.0
+    ],
+    [
+      25.0,
+      -12.0,
+      -7.0
+    ],
+    [
+      25.0,
+      0.0,
+      -7.0
+    ],
+    [
+      25.0,
+      12.0,
+      -7.0
+    ]
+  ],
+  "ff_cfg": {
+    "tau_arm_s": 1.0,
+    "min_fit_span_us": 150000,
+    "min_t_stat": 8.0,
+    "confirm_evals": 15,
+    "max_miss_radii": 6.0,
+    "tau_min_s": 0.15
+  },
+  "gf_preset": {
+    "fov_deg": 42.5,
+    "lplc2_half_size_deg": 1.5,
+    "lc4_half_velocity_dps": 5.0
+  },
+  "baf_us": 2000,
+  "gf_gate": "t_stat>4 and 0<tau<2 s on either camera",
+  "latency_us": 2000,
+  "loop_dt": 0.002,
+  "r_obj": 0.15,
+  "hit_dist": 0.4
+}

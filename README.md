@@ -12,11 +12,12 @@ Python SDK, a PX4 offboard bridge, a CAN-FD frame and a Verilog prototype of the
 
 > **Status: research prototype.** Everything below was measured in simulation: synthetic events
 > and PX4 SITL. Nothing has been flown, run on real event-camera data, or measured on embedded
-> hardware. In the final held-out PX4 SITL campaign (v3, simulated IMX636 + far-field TTC stage) the
-> reflex had 0 collisions at 6, 10, 14 and 20 m/s (95% CI upper bound 4.2–4.6%) and 0 false triggers on
-> the dual rig. It does **not** meet the bar at 30–120 m/s: 5–25% collisions with the tiled rig, all
-> off-axis. See [the v3 results](#px4-sitl-campaign-v3-final-held-out-imx636-camera--far-field-ttc-stage).
-> Earlier campaigns (v1: no improvement; v2: 73.6% to 55.6%) are kept as history.
+> hardware. In the final held-out PX4 SITL campaign (v4: an 8 mm plus 3x3 25 mm IMX636 rig with the
+> far-field TTC stage), the reflex had 0 collisions in 66 trials at each of 6, 10, 14, 20 and 30 m/s
+> (95% CI upper bound 5.5%), and 0 false triggers in 198 controls. It does **not** meet the bar at
+> 60 m/s (7.6%), 90 m/s (4.5%, CI upper bound 12.5%) or 120 m/s (21.2%). See
+> [the v4 results](#px4-sitl-campaign-v4-final-held-out-3x3-tiled-25-mm-imx636-rig-6120-ms).
+> v1–v3 are kept as history.
 
 ---
 
@@ -68,7 +69,89 @@ geometric event synthesis, 5 seeds per condition):
 
 ![validation](docs/model/looming_validation.png)
 
-## PX4 SITL campaign v3 (final held-out: IMX636 camera + far-field TTC stage)
+## PX4 SITL campaign v4 (final held-out: 3x3 tiled 25 mm IMX636 rig, 6–120 m/s)
+
+**Rig (`tiled9`).** One 8 mm IMX636 camera (42.5° HFOV) for the near field, plus a 3x3 grid of 25 mm
+IMX636 tiles (14.2° x 8.0° each, at yaw −12/0/+12° and pitch −7/0/+7°). The grid covers ±19.1° x
+±11.0° at 25 mm resolution, which is the whole threat cone (±15° x ±8°) with margin. Every tile has
+its own derotation and its own far-field tracker, and any tile can arm.
+
+The v3 tiled rig had only two pitch rows (±3.5°), so it lost objects beyond about ±5.5° elevation. In
+v3, most of its collisions were in that band.
+
+**Hardware plausibility (estimates, not measured):**
+- CenturyArks SilkyEvCam HD is a board-level IMX636 module with MIPI output: 12 g without lens, about
+  0.26 W average (80 mA at 3.3 V). Ten modules with M12 lenses come to roughly 200 g, plus the mount
+  and about 3 W.
+- No module price is published. The Prophesee EVK4 HD evaluation camera costs US$5,450, so ten of those
+  would be about US$55k.
+- Ten 2-lane MIPI streams need a SoC with CSI aggregation.
+- This is purchasable, but it is a heavy, expensive payload, suited to a larger airframe rather than a
+  small quad.
+
+**Method.**
+- The far-field config is the v3 frozen config, unchanged.
+- Stricter miss and confirm gates were tested on dev seeds: miss < 4 or 5 radii, and 25 or 40
+  consecutive confirmations. They were rejected because they stopped arming on dev threats (for
+  example, 120 m/s armed in only 6 of 16 dev trials with confirm 40).
+- The v3 flyby false trigger (u2-0048) started while the vehicle was still moving from the previous
+  escape (`settled=0`). v4 waits up to 60 s for the vehicle to settle, and 91.6% of trials started
+  settled.
+- Seeds 2001–2006 are new. Six PX4 instances ran with `SIM_BAT_MIN_PCT=100`. The run was a single
+  campaign with no restarts.
+
+### Results (reflex arm, Wilson 95% CI)
+
+| Speed | n | Collisions | Rate [95% CI] | Baseline | Median TTC at trigger | Bar met? |
+|---|---|---|---|---|---|---|
+| 6 m/s | 66 | 0 | 0.0% [0.0, 5.5] | 0/6 | 1263 ms | yes |
+| 10 m/s | 66 | 0 | 0.0% [0.0, 5.5] | 5/6 | 937 ms | yes |
+| 14 m/s | 66 | 0 | 0.0% [0.0, 5.5] | 6/6 | 932 ms | yes |
+| 20 m/s | 66 | 0 | 0.0% [0.0, 5.5] | 6/6 | 819 ms | yes |
+| 30 m/s | 66 | 0 | 0.0% [0.0, 5.5] | 5/6 | 935 ms | yes |
+| 60 m/s | 66 | 5 | 7.6% [3.3, 16.5] | 6/6 | 871 ms | no |
+| 90 m/s | 66 | 3 | 4.5% [1.6, 12.5] | 6/6 | 648 ms | no (rate meets ≤5%; CI upper bound does not) |
+| 120 m/s | 66 | 14 | 21.2% [13.1, 32.5] | 5/6 | 492 ms | no |
+
+**False triggers:** 0/66 hover, 0/66 sensor noise, 0/66 flyby. This meets the bar.
+
+**Measured envelope (60–120 m/s reflex trials, collisions by TTC at trigger):**
+
+| TTC at trigger | Collisions / trials |
+|---|---|
+| not armed | 6/10 |
+| < 300 ms | 10/11 |
+| 300–400 ms | 4/14 |
+| 400–500 ms | 2/22 |
+| ≥ 500 ms | **0/141** |
+
+Escaping requires arming at least about 0.5 s before contact, which means about 60 m at 120 m/s. The
+rig reaches that at 60 and 90 m/s in most trials. At 120 m/s it reaches it in about half: the median
+TTC at trigger is 492 ms, and the 10th percentile trigger distance is 39.8 m. The limit is how early
+the 1/r regression gets a significant expansion signal: about 6 px radius and a few px/s of growth at
+100 m. Escape dynamics are not the limit. Meeting 120 m/s would need longer focal lengths, which means
+roughly 4x more tiles for the same cone, or a higher-resolution sensor than any event sensor on sale
+today.
+
+### Disclosures
+- **Battery-failsafe exclusion rule fixed.** In v4, the `landed_cutoff` rule from v3 wrongly flagged
+  shard x0: normal hover jitter produced five small monotone rises. The rule now also requires a total
+  rise greater than 1 m. x0 never descended (every start altitude was 10.4–12.5 m), so v4 excludes no
+  trials. The v3 exclusions are unchanged (s0: 26, s1: 23).
+- **Loop-rate stalls.** A few trials had loop-rate stalls: x4-0104 ran at 2.2 Hz, x1-0102 at 15 Hz, and
+  x3-0121 at 36.6 Hz, all from host CPU contention with six instances. They are kept in the data. None
+  of the stalled threat trials was a reflex collision.
+- **Rig choice after v3.** The rig was changed after the v3 results. It was chosen from dev seeds (dev:
+  96/96 threats armed at 30–120 m/s, minimum TTC 0.46 s, 0/180 flyby arms) and evaluated once here.
+
+![collision rate v4](docs/sim_v4/collision_rate_by_tier.png)
+![trigger TTC v4](docs/sim_v4/trigger_ttc_by_speed.png)
+
+| 60 m/s evasion | 120 m/s hit |
+|---|---|
+| ![](docs/sim_v4/evasion_60mps.gif) | ![](docs/sim_v4/hit_120mps.gif) |
+
+## PX4 SITL campaign v3 (held-out: IMX636 camera + far-field TTC stage, history)
 
 **Setup.** Simulated Prophesee IMX636 sensor (1280x720, 4.86 µm pixels, contrast threshold, 1 ms
 refractory period, 0.1 Hz/px background activity, 2 ms latency). Two rigs:

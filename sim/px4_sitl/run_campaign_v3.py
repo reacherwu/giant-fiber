@@ -35,7 +35,10 @@ LENSES_MM = (8.0, 25.0)
 # Camera rigs: list of (lens_mm, yaw_deg, pitch_deg). "dual" was the first held-out run; "tiled" adds
 # overlapping 25 mm cameras (yaw -12/0/+12, pitch +-3.5) covering about +-19 x +-7.5 deg.
 RIGS = {"dual": [(8.0, 0.0, 0.0), (25.0, 0.0, 0.0)],
-        "tiled": [(8.0, 0.0, 0.0)] + [(25.0, y, p) for p in (3.5, -3.5) for y in (-12.0, 0.0, 12.0)]}
+        "tiled": [(8.0, 0.0, 0.0)] + [(25.0, y, p) for p in (3.5, -3.5) for y in (-12.0, 0.0, 12.0)],
+        # 3x3 grid of 25 mm IMX636 tiles (HFOV 14.2 deg, VFOV 8.0 deg; 12 / 7 deg spacing) covering
+        # +-19.1 x +-11.0 deg at 25 mm resolution, plus the 8 mm wide camera (index 0)
+        "tiled9": [(8.0, 0.0, 0.0)] + [(25.0, y, p) for p in (7.0, 0.0, -7.0) for y in (-12.0, 0.0, 12.0)]}
 FF_CFG = dict(tau_arm_s=1.0, min_fit_span_us=150000, min_t_stat=8.0, confirm_evals=15, max_miss_radii=6.0, tau_min_s=0.15)
 GF_PRESET = dict(fov_deg=42.5, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0)
 LATENCY_US = 2000
@@ -94,7 +97,7 @@ def run_trial(veh, trial, rng, args, out_dir):
     rig = RIGS[args.rig]
     cams = [imx636_camera(noise_rate_hz=noise, refractory_us=1000, lens_mm=L, seed=rng.randrange(1 << 30)) for L, _, _ in rig]
     mounts = [mount_rotation(y, p) for _, y, p in rig]
-    ffs = [FarFieldTTC(FarFieldConfig(**FF_CFG)) for _ in cams]
+    ffs = [FarFieldTTC(FarFieldConfig(**{**FF_CFG, **args.ff_over})) for _ in cams]
     ders = [Derotator(c.width, c.height, c.fov_deg, R_cb=m) for c, m in zip(cams, mounts)]
     bufs = [[] for _ in cams]
     gf = GiantFiberCoprocessor(ReflexConfig(**GF_PRESET))
@@ -278,8 +281,11 @@ def main():
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--shard", default="s0")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--ff-cfg", default="{}", help="overrides of FF_CFG, python dict literal")
     ap.add_argument("--rig", default="dual", choices=sorted(RIGS))
     args = ap.parse_args()
+    import ast
+    args.ff_over = ast.literal_eval(args.ff_cfg)
     rng = random.Random(args.seed)
     plan = build_plan(args, rng)
     if args.limit:

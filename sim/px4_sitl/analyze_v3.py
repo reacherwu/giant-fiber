@@ -21,14 +21,15 @@ def wilson(k, n, z=1.96):
 
 def landed_cutoff(shard_dir, ids):
     """Index of the first trial at which PX4's battery failsafe had started a descent: the start altitude
-    rises monotonically over the next 5 trials. That trial and all later ones in the shard are excluded."""
+    rises monotonically over the next 5 trials, by more than 1 m in total (smaller monotone runs
+    occur by chance in normal hover jitter). That trial and all later ones in the shard are excluded."""
     z = []
     for tid in ids:
         tr = pd.read_csv(os.path.join(shard_dir, "traces", f"{tid}.csv.gz"), nrows=1)
         z.append(float(tr.drone_d.iloc[0]) if len(tr) else float("nan"))
     cut = len(z)
     for i in range(len(z) - 5):
-        if all(z[j + 1] > z[j] + 0.05 for j in range(i, i + 5)):
+        if all(z[j + 1] > z[j] + 0.05 for j in range(i, i + 5)) and z[i + 5] - z[i] > 1.0:
             cut = i
             break
     # ... or the vehicle never again starts a trial at hover altitude (below -10.5 m NED in the gt frame)
