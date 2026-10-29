@@ -16,6 +16,8 @@ jobs:
           targets: thumbv7em-none-eabihf
       - name: cargo test
         run: cargo test --workspace
+      - name: cargo test (grid128 feature)
+        run: cargo test --workspace --features grid128
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: no_std build (thumbv7em-none-eabihf)
@@ -38,6 +40,10 @@ jobs:
         run: |
           sudo apt-get install -y linux-modules-extra-$(uname -r) || true
           sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set vcan0 mtu 72 up && ip link show vcan0
+      - name: Lint (ruff)
+        run: ruff check giantfiber tests
+      - name: Type check (mypy)
+        run: mypy giantfiber --ignore-missing-imports
       - name: Python tests
         run: python -m pytest tests -v
       - name: RTL check (Icarus Verilog)

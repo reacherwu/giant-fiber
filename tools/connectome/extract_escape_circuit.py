@@ -25,7 +25,6 @@ Outputs (all values are copied from the source tables, nothing is hand-edited):
 """
 import argparse
 import hashlib
-import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -126,16 +125,16 @@ def main():
 
     rows = []
     for side in ["left", "right"]:
-        gf_id = [r for r in gf_ids if cside[r] == side][0]
+        gf_id = next(r for r in gf_ids if cside[r] == side)
         for src in ["LPLC2", "LC4"]:
             e = gf_edges[(gf_edges.post_side == side) & (gf_edges.pre_type == src)]
-            rows.append(dict(side=side, pre_type=src, target="DNp01", target_root_id=gf_id,
-                             n_pre_neurons=len(e), syn_count=int(e.syn_count.sum()),
-                             target_total_input_syn=int(gf_in_total[gf_id])))
+            rows.append({"side": side, "pre_type": src, "target": "DNp01", "target_root_id": gf_id,
+                             "n_pre_neurons": len(e), "syn_count": int(e.syn_count.sum()),
+                             "target_total_input_syn": int(gf_in_total[gf_id])})
             d = dn[(dn.post_side == side) & (dn.pre_type == src)]
-            rows.append(dict(side=side, pre_type=src, target="nonGF_DN", target_root_id=0,
-                             n_pre_neurons=d.pre_pt_root_id.nunique(), syn_count=int(d.syn_count.sum()),
-                             target_total_input_syn=0))
+            rows.append({"side": side, "pre_type": src, "target": "nonGF_DN", "target_root_id": 0,
+                             "n_pre_neurons": d.pre_pt_root_id.nunique(), "syn_count": int(d.syn_count.sum()),
+                             "target_total_input_syn": 0})
     summary = pd.DataFrame(rows)
     summary.to_csv(OUT / "flywire783_escape_summary.csv", index=False)
     top_dn.rename("lplc2_plus_lc4_syn").to_csv(OUT / "flywire783_nongf_dn_types.csv")
@@ -224,7 +223,7 @@ def write_python(gf_edges, summary, top_dn, motor):
          '"""', "",
          "ESCAPE_SUMMARY = ["]
     for _, r in summary.iterrows():
-        L.append(f"    {dict(side=r.side, pre_type=r.pre_type, target=r.target, target_root_id=int(r.target_root_id), n_pre_neurons=int(r.n_pre_neurons), syn_count=int(r.syn_count), target_total_input_syn=int(r.target_total_input_syn))!r},")
+        L.append(f"    { {'side': r.side, 'pre_type': r.pre_type, 'target': r.target, 'target_root_id': int(r.target_root_id), 'n_pre_neurons': int(r.n_pre_neurons), 'syn_count': int(r.syn_count), 'target_total_input_syn': int(r.target_total_input_syn)}!r},")
     L.append("]")
     L.append("")
     L.append("NONGF_DN_TYPES = " + repr({k: int(v) for k, v in top_dn.items()}))

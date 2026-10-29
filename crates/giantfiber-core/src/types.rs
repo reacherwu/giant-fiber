@@ -173,6 +173,11 @@ pub struct EngineConfig {
     pub min_edge_cells: u32,
 }
 
+#[cfg(not(feature = "grid128"))]
+const DEFAULT_MIN_EDGE_CELLS: u32 = 6;
+#[cfg(feature = "grid128")]
+const DEFAULT_MIN_EDGE_CELLS: u32 = 24;
+
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
@@ -188,7 +193,7 @@ impl Default for EngineConfig {
             lplc2_half_size_deg: 20.0,
             lc4_half_velocity_dps: 200.0,
             long_mode_window_us: 30_000.0,
-            min_edge_cells: 6,
+            min_edge_cells: DEFAULT_MIN_EDGE_CELLS,
         }
     }
 }

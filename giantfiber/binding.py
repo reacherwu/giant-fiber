@@ -2,12 +2,22 @@
 
 Thin ctypes wrapper over the Rust C ABI (no NumPy/PyTorch dependency).
 """
+from __future__ import annotations
 
 import ctypes
 import os
-import sys
 from ctypes import (
-    c_uint8, c_int8, c_uint16, c_uint32, c_uint64, c_float, c_void_p, c_size_t, c_int32, Structure, POINTER
+    POINTER,
+    Structure,
+    c_float,
+    c_int8,
+    c_int32,
+    c_size_t,
+    c_uint8,
+    c_uint16,
+    c_uint32,
+    c_uint64,
+    c_void_p,
 )
 from pathlib import Path
 
@@ -123,7 +133,7 @@ def _find_library() -> str:
 class GiantFiberCoreBinding:
     """Direct FFI wrapper around libgiantfiber_core."""
 
-    def __init__(self, lib_path: str = None):
+    def __init__(self, lib_path: str | None = None):
         path = lib_path or _find_library()
         self.lib = ctypes.CDLL(path)
 
@@ -138,6 +148,10 @@ class GiantFiberCoreBinding:
         # gf_engine_reset(engine: *mut GiantFiberEngine)
         self.lib.gf_engine_reset.argtypes = [c_void_p]
         self.lib.gf_engine_reset.restype = None
+
+        # gf_get_config(engine, out) -> i32
+        self.lib.gf_get_config.argtypes = [c_void_p, POINTER(C_EngineConfig)]
+        self.lib.gf_get_config.restype = c_int32
 
         # gf_feed_event(engine, spike, raw_w, raw_h)
         self.lib.gf_feed_event.argtypes = [c_void_p, POINTER(C_EventSpike), c_uint16, c_uint16]
@@ -177,7 +191,7 @@ class GiantFiberCoreBinding:
         self.lib.gf_canfd_encode.argtypes = [POINTER(C_ReflexOutput), c_uint16, c_uint32, POINTER(c_uint8)]
         self.lib.gf_canfd_encode.restype = c_int32
 
-    def canfd_encode(self, output: "C_ReflexOutput", sequence: int, timestamp_ms: int) -> bytes:
+    def canfd_encode(self, output: C_ReflexOutput, sequence: int, timestamp_ms: int) -> bytes:
         """24-byte CAN-FD reflex frame built by the Rust (no_std) encoder."""
         buf = (c_uint8 * 24)()
         n = self.lib.gf_canfd_encode(ctypes.byref(output), sequence & 0xFFFF, timestamp_ms & 0xFFFFFFFF, buf)

@@ -4,6 +4,8 @@
 pytest>=7          # 9.1.1
 psutil>=5.9        # 7.2.2
 pymavlink>=2.4.40  # 2.4.50  (PX4 SITL campaign + codec cross-check test)
+ruff>=0.16         # lint
+mypy>=1.20         # type check
 matplotlib>=3.7    # 3.11.2
 pandas>=2.0        # 3.0.6
 pyarrow>=14        # 26.0.0  (reads the FlyWire / MANC feather files)

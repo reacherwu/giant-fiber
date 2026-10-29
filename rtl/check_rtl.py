@@ -19,8 +19,8 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-from giantfiber import GiantFiberCoprocessor, ReflexConfig  # noqa: E402
-from giantfiber.sim.events import EventCamera  # noqa: E402
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
+from giantfiber.sim.events import EventCamera
 
 Q = 65536
 
@@ -76,8 +76,7 @@ def run_engine(kind, rv_ms=None, seed=0, noise=0.3):
 
 def run_rtl(rows, work):
     with open(os.path.join(work, "stimulus.txt"), "w") as f:
-        for lp, lc, *_ in rows:
-            f.write(f"{round(lp[0] * Q)} {round(lp[1] * Q)} {round(lc[0] * Q)} {round(lc[1] * Q)}\n")
+        f.writelines(f"{round(lp[0] * Q)} {round(lp[1] * Q)} {round(lc[0] * Q)} {round(lc[1] * Q)}\n" for lp, lc, *_ in rows)
     exe = os.path.join(work, "tb.vvp")
     subprocess.run(["iverilog", "-g2005", "-o", exe, os.path.join(HERE, "gf_descending.v"),
                     os.path.join(HERE, "tb_gf_descending.v")], check=True)
@@ -103,9 +102,9 @@ def main():
             dv_ng = max(abs(r[3][i] - o[2 + i] / Q) for r, o in zip(rows, out) for i in (0, 1))
             first_rust = next((k for k, r in enumerate(rows) if r[4]), None)
             first_rtl = next((k for k, o in enumerate(out) if o[4]), None)
-            res = dict(stimulus=kind, rv_ms=rv, seed=seed, steps=len(rows), mode_mismatch_steps=mode_mismatch,
-                       first_escape_step_rust=first_rust, first_escape_step_rtl=first_rtl,
-                       max_abs_err_v_gf=round(dv_gf, 6), max_abs_err_v_nongf=round(dv_ng, 6))
+            res = {"stimulus": kind, "rv_ms": rv, "seed": seed, "steps": len(rows), "mode_mismatch_steps": mode_mismatch,
+                       "first_escape_step_rust": first_rust, "first_escape_step_rtl": first_rtl,
+                       "max_abs_err_v_gf": round(dv_gf, 6), "max_abs_err_v_nongf": round(dv_ng, 6)}
             results.append(res)
             print(res)
     # Fixed point vs float32: a membrane that lands within ~1e-4 of a threshold can cross one step
@@ -117,7 +116,7 @@ def main():
     ok = not errs and all(close(r) for r in results)
     summary_exact = sum(1 for r in results if r["mode_mismatch_steps"] == 0)
     print(f"{summary_exact}/{len(results)} stimuli with bit-for-bit identical mode sequences")
-    summary = dict(parameter_errors=errs, cases=results, passed=ok, exact_mode_match=summary_exact, n_cases=len(results))
+    summary = {"parameter_errors": errs, "cases": results, "passed": ok, "exact_mode_match": summary_exact, "n_cases": len(results)}
     if a.json:
         json.dump(summary, open(a.json, "w"), indent=2)
     print("RESULT:", "PASS" if ok else "FAIL")

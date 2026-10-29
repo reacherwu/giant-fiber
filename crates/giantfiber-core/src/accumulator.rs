@@ -4,7 +4,7 @@
 //! (centroid, variance, and expansion rate) without dynamic heap allocations.
 
 use crate::types::EventSpike;
-use crate::math::{expf, sqrtf};
+use crate::math::expf;
 
 /// Time-surface resolution. 64x64 by default; the `grid128` feature selects 128x128
 /// (longer detection range for small/far objects, 4x the surface memory: ~164 KB vs ~41 KB).
@@ -111,20 +111,23 @@ impl EventAccumulator {
         } else {
             self.win_count[sy][sx] = self.win_count[sy][sx].saturating_add(1);
         }
-        self.last_timestamp[sy][sx] = spike.timestamp_us;
-        self.polarity_surface[sy][sx] = if spike.polarity == 0 { -1 } else { spike.polarity };
+        // Guard against out-of-order events corrupting the decay surface.
+        if spike.timestamp_us >= self.last_timestamp[sy][sx] {
+            self.last_timestamp[sy][sx] = spike.timestamp_us;
+        }
+        // Validate/clamp polarity to +/-1 (treat any unknown value as +1).
+        let pol = match spike.polarity {
+            -1 => -1,
+            0 => -1,
+            1 => 1,
+            _ => 1,
+        };
+        self.polarity_surface[sy][sx] = pol;
         self.recent_event_count = self.recent_event_count.saturating_add(1);
 
-        // Exponential moving average for Centroid
-        let alpha = 0.05f32;
-        self.centroid_x = (1.0 - alpha) * self.centroid_x + alpha * (sx as f32);
-        self.centroid_y = (1.0 - alpha) * self.centroid_y + alpha * (sy as f32);
-
-        let dx = (sx as f32) - self.centroid_x;
-        let dy = (sy as f32) - self.centroid_y;
-        let dist = sqrtf(dx * dx + dy * dy);
-
-        self.radius = (1.0 - alpha) * self.radius + alpha * dist.max(1.0);
+        // NOTE: centroid / radius EMA removed for performance. These fields are
+        // retained (and left at their initial values) for snapshot compatibility;
+        // the looming estimator computes its own centroid/radius from edge cells.
     }
 
     /// Update expansion rate and temporal dynamics at evaluation step.

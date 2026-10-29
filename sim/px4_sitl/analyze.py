@@ -7,20 +7,17 @@ Outputs: <dir>/summary.json, <dir>/summary_by_speed.csv, <dir>/*.png, <dir>/evas
 Every number written here is computed from the input files; nothing is hard-coded.
 """
 import argparse
-import csv
-import glob
-import gzip
 import json
 import math
 import os
 
+import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib import animation  # noqa: E402
+import matplotlib.pyplot as plt
+from matplotlib import animation
 
 HIT_DIST = 0.40  # must match run_campaign.R_OBJ + R_VEHICLE
 
@@ -43,9 +40,9 @@ def q(x, p):
 def stats(x):
     x = pd.to_numeric(x, errors="coerce").dropna()
     if not len(x):
-        return dict(n=0)
-    return dict(n=int(len(x)), mean=round(float(x.mean()), 3), median=round(float(x.median()), 3),
-                p05=round(q(x, 5), 3), p95=round(q(x, 95), 3), min=round(float(x.min()), 3), max=round(float(x.max()), 3))
+        return {"n": 0}
+    return {"n": len(x), "mean": round(float(x.mean()), 3), "median": round(float(x.median()), 3),
+                "p05": round(q(x, 5), 3), "p95": round(q(x, 95), 3), "min": round(float(x.min()), 3), "max": round(float(x.max()), 3)}
 
 
 def group_label(arm, cfg):
@@ -71,29 +68,29 @@ def summarize(df):
         hits = int(g.hit.sum())
         trig = int(g.triggered.sum())
         tg = g[g.triggered == 1]
-        out[group_label(arm, cfg)] = dict(
-            arm=arm, config=cfg, n_trials=n, n_unsettled=int((~g.settled.astype(bool)).sum()),
-            hits=hits, hit_rate=round(hits / n, 4), hit_rate_ci95=[round(v, 4) for v in wilson(hits, n)],
-            evasion_success_rate=round(1 - hits / n, 4),
-            evasion_success_ci95=[round(1 - v, 4) for v in reversed(wilson(hits, n))],
-            detection_rate=round(trig / n, 4),
-            first_mode_short=int((tg.first_mode == "short").sum()), first_mode_long=int((tg.first_mode == "long").sum()),
-            reached_short=int(tg.modes.fillna("").str.contains("S").sum()),
-            min_dist_m=stats(g.min_dist_m), clearance_m=stats(g.clearance_m),
-            trigger_ttc_ms=stats(tg.trigger_ttc_ms), trigger_dist_m=stats(tg.trigger_dist_m),
-            compute_latency_us=stats(tg.compute_latency_us), detect_to_send_us=stats(tg.detect_to_send_us),
-            response_latency_ms=stats(tg.response_latency_ms),
-            hits_given_triggered=int(tg.hit.sum()), n_triggered=trig,
-            hits_given_not_triggered=int(g[g.triggered == 0].hit.sum()),
-        )
+        out[group_label(arm, cfg)] = {
+            "arm": arm, "config": cfg, "n_trials": n, "n_unsettled": int((~g.settled.astype(bool)).sum()),
+            "hits": hits, "hit_rate": round(hits / n, 4), "hit_rate_ci95": [round(v, 4) for v in wilson(hits, n)],
+            "evasion_success_rate": round(1 - hits / n, 4),
+            "evasion_success_ci95": [round(1 - v, 4) for v in reversed(wilson(hits, n))],
+            "detection_rate": round(trig / n, 4),
+            "first_mode_short": int((tg.first_mode == "short").sum()), "first_mode_long": int((tg.first_mode == "long").sum()),
+            "reached_short": int(tg.modes.fillna("").str.contains("S").sum()),
+            "min_dist_m": stats(g.min_dist_m), "clearance_m": stats(g.clearance_m),
+            "trigger_ttc_ms": stats(tg.trigger_ttc_ms), "trigger_dist_m": stats(tg.trigger_dist_m),
+            "compute_latency_us": stats(tg.compute_latency_us), "detect_to_send_us": stats(tg.detect_to_send_us),
+            "response_latency_ms": stats(tg.response_latency_ms),
+            "hits_given_triggered": int(tg.hit.sum()), "n_triggered": trig,
+            "hits_given_not_triggered": int(g[g.triggered == 0].hit.sum()),
+        }
     ctrl = {}
     for kind in ("no_object", "flyby"):
         g = df[df.kind == kind]
         if not len(g):
             continue
         k = int(g.triggered.sum())
-        d = dict(n_trials=len(g), false_triggers=k, false_trigger_rate=round(k / len(g), 4),
-                 false_trigger_rate_ci95=[round(v, 4) for v in wilson(k, len(g))])
+        d = {"n_trials": len(g), "false_triggers": k, "false_trigger_rate": round(k / len(g), 4),
+                 "false_trigger_rate_ci95": [round(v, 4) for v in wilson(k, len(g))]}
         if kind == "no_object":
             dur = float(pd.to_numeric(g.duration_s, errors="coerce").sum())
             d["observed_seconds"] = dur
@@ -116,12 +113,12 @@ def by_speed(df):
             n, h = len(g), int(g.hit.sum())
             lo, hi = wilson(h, n)
             tg = g[g.triggered == 1]
-            rows.append(dict(group=group_label(arm, cfg), speed_mps=v, n=n, hits=h, hit_rate=round(h / n, 4),
-                             hit_ci_lo=round(lo, 4), hit_ci_hi=round(hi, 4),
-                             detection_rate=round(len(tg) / n, 4),
-                             median_trigger_ttc_ms=q(tg.trigger_ttc_ms, 50),
-                             median_response_ms=q(tg.response_latency_ms, 50),
-                             median_min_dist_m=q(g.min_dist_m, 50)))
+            rows.append({"group": group_label(arm, cfg), "speed_mps": v, "n": n, "hits": h, "hit_rate": round(h / n, 4),
+                             "hit_ci_lo": round(lo, 4), "hit_ci_hi": round(hi, 4),
+                             "detection_rate": round(len(tg) / n, 4),
+                             "median_trigger_ttc_ms": q(tg.trigger_ttc_ms, 50),
+                             "median_response_ms": q(tg.response_latency_ms, 50),
+                             "median_min_dist_m": q(g.min_dist_m, 50)})
     return pd.DataFrame(rows)
 
 
@@ -258,7 +255,7 @@ def make_gif(df, d, tid, path, fps=20):
     t_end = min(tr.t.iloc[-1], (row.t_min_s or tr.t.iloc[-1]) + 0.6)
     t_start = max(0.0, t_end - 2.2)
     tr = tr[(tr.t >= t_start) & (tr.t <= t_end)].reset_index(drop=True)
-    n0, e0, d0 = tr.drone_n.iloc[0], tr.drone_e.iloc[0], tr.drone_d.iloc[0]
+    n0, e0, _d0 = tr.drone_n.iloc[0], tr.drone_e.iloc[0], tr.drone_d.iloc[0]
     fig = plt.figure(figsize=(9, 4.5))
     ax1 = fig.add_subplot(1, 2, 1)
     ax2 = fig.add_subplot(2, 2, 2)
@@ -297,7 +294,7 @@ def make_gif(df, d, tid, path, fps=20):
         cur3.set_xdata([r.t, r.t])
         return veh, obj, vtrail, otrail, txt, cur2, cur3
 
-    step = max(1, int(round(len(tr) / (tr.t.iloc[-1] - tr.t.iloc[0]) / fps)))
+    step = max(1, round(len(tr) / (tr.t.iloc[-1] - tr.t.iloc[0]) / fps))
     frames = list(range(0, len(tr), step))
     anim = animation.FuncAnimation(fig, upd, frames=frames, blit=False)
     fig.tight_layout()
@@ -341,12 +338,12 @@ def ulog_evasions(ulg_path, df, out_png, out_csv):
         axs[0].plot(tt, dv, lw=0.6, alpha=0.5)
         axs[1].plot(tt, dp, lw=0.6, alpha=0.5)
         after = tt > 0
-        rows.append(dict(episode=k, t_start_s=round(ts, 3), logged_setpoints=len(ii),
-                         accel_cmd_mps2=round(float(np.linalg.norm(a_mean)), 2),
-                         dv_at_0p25s=round(float(np.interp(0.25, tt, dv)), 3),
-                         dv_at_0p5s=round(float(np.interp(0.5, tt, dv)), 3),
-                         disp_at_0p5s=round(float(np.interp(0.5, tt, dp)), 3),
-                         t_dv_0p2=round(float(tt[after][np.argmax(dv[after] >= 0.2)]), 3) if (dv[after] >= 0.2).any() else None))
+        rows.append({"episode": k, "t_start_s": round(ts, 3), "logged_setpoints": len(ii),
+                         "accel_cmd_mps2": round(float(np.linalg.norm(a_mean)), 2),
+                         "dv_at_0p25s": round(float(np.interp(0.25, tt, dv)), 3),
+                         "dv_at_0p5s": round(float(np.interp(0.5, tt, dv)), 3),
+                         "disp_at_0p5s": round(float(np.interp(0.5, tt, dp)), 3),
+                         "t_dv_0p2": round(float(tt[after][np.argmax(dv[after] >= 0.2)]), 3) if (dv[after] >= 0.2).any() else None})
     for ax, lab in zip(axs, ["Δv along commanded direction (m/s)", "displacement along commanded direction (m)"]):
         ax.axvline(0, color="k", lw=0.8)
         ax.set_xlabel("time from first logged accel setpoint (s)")
@@ -357,12 +354,12 @@ def ulog_evasions(ulg_path, df, out_png, out_csv):
     plt.close(fig)
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     n_cmd = int(((df.kind != "threat") | (df.arm == "reflex")).mul(df.triggered == 1).sum())
-    return dict(ulog=os.path.basename(ulg_path), episodes_found=len(episodes),
-                reflex_trials_with_trigger=n_cmd,
-                setpoint_log_rate_hz=round(len(t_sp) / (t_sp[-1] - t_sp[0]), 1),
-                dv_at_0p5s=stats(pd.Series([r["dv_at_0p5s"] for r in rows])),
-                disp_at_0p5s=stats(pd.Series([r["disp_at_0p5s"] for r in rows])),
-                t_dv_0p2_s=stats(pd.Series([r["t_dv_0p2"] for r in rows])))
+    return {"ulog": os.path.basename(ulg_path), "episodes_found": len(episodes),
+                "reflex_trials_with_trigger": n_cmd,
+                "setpoint_log_rate_hz": round(len(t_sp) / (t_sp[-1] - t_sp[0]), 1),
+                "dv_at_0p5s": stats(pd.Series([r["dv_at_0p5s"] for r in rows])),
+                "disp_at_0p5s": stats(pd.Series([r["disp_at_0p5s"] for r in rows])),
+                "t_dv_0p2_s": stats(pd.Series([r["t_dv_0p2"] for r in rows]))}
 
 
 def main():

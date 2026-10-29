@@ -3,11 +3,22 @@
 hovering vehicle with attitude jitter. Reports arming time-to-contact for threats and false arms
 for fly-bys and object-free noise. Development scenarios use seeds < 10000; the final SITL campaign
 uses different seeds and randomised geometry."""
-import argparse, json, math, sys, os
+import argparse
+import json
+import math
+import os
+import sys
+
 import numpy as np
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from giantfiber.sim.events import imx636_camera, world_to_cam, quat_to_rot, mount_rotation  # noqa: E402
-from giantfiber.farfield import FarFieldTTC, FarFieldConfig, Derotator  # noqa: E402
+from giantfiber.farfield import Derotator, FarFieldConfig, FarFieldTTC
+from giantfiber.sim.events import (
+    imx636_camera,
+    mount_rotation,
+    quat_to_rot,
+    world_to_cam,
+)
 
 HIT = 0.40
 DT = 2000
@@ -76,7 +87,7 @@ def run(kind, v, dist, az, el, offset, R, noise, seed, cfg, jitter_deg=0.5, late
         o = next((x for x in outs if x["armed"]), outs[0])
         if o["armed"] and first is None:
             ttc = (d - HIT) / v if kind != "noise" else float("nan")
-            first = dict(t=now * 1e-6, dist=d, true_ttc=ttc, tau=o["tau_s"], miss=o["miss_radii"], r=o["r_px"])
+            first = {"t": now * 1e-6, "dist": d, "true_ttc": ttc, "tau": o["tau_s"], "miss": o["miss_radii"], "r": o["r_px"]}
             if kind != "threat":
                 break
         if kind == "threat" and d < HIT:
@@ -104,7 +115,7 @@ def main():
     cfg = FarFieldConfig(**eval(a.cfg))
     D = [float(x) for x in a.dist.split(",")]
     a.lens = a.lens.split(",")
-    out = dict(cfg=cfg.__dict__, threats={}, flyby=[], noise=[])
+    out = {"cfg": cfg.__dict__, "threats": {}, "flyby": [], "noise": []}
     speeds = [float(x) for x in a.speeds.split(",")]
     for v in speeds:
         res = []

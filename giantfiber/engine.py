@@ -2,25 +2,37 @@
 
 Provides an intuitive, zero-copy, type-safe interface for robotics and autonomous systems.
 """
+from __future__ import annotations
 
-from typing import Optional, List, Tuple
 import ctypes
+
 from .binding import (
-    GiantFiberCoreBinding, C_EngineConfig, C_EventSpike, C_ImuData, C_ReflexOutput, C_GfDebugState
+    C_EngineConfig,
+    C_EventSpike,
+    C_GfDebugState,
+    C_ImuData,
+    C_ReflexOutput,
+    GiantFiberCoreBinding,
 )
 from .types import (
-    ReflexConfig, ReflexDecision, ReflexAction, ReflexVector, CircuitTrace, EventPacket, EventSpike, EscapeMode
+    CircuitTrace,
+    EscapeMode,
+    EventPacket,
+    ReflexAction,
+    ReflexConfig,
+    ReflexDecision,
+    ReflexVector,
 )
 
 
 class GiantFiberCoprocessor:
     """Python handle to the Rust looming-escape engine."""
 
-    def __init__(self, config: Optional[ReflexConfig] = None, lib_path: Optional[str] = None):
+    def __init__(self, config: ReflexConfig | None = None, lib_path: str | None = None):
         self.config = config or ReflexConfig()
         self._binding = GiantFiberCoreBinding(lib_path)
 
-        c_cfg = C_EngineConfig(**{name: getattr(self.config, name) for name, _ in C_EngineConfig._fields_})
+        c_cfg = C_EngineConfig(**{name: getattr(self.config, name) for name, *_ in C_EngineConfig._fields_})
         self._engine_ptr = self._binding.lib.gf_engine_new(ctypes.byref(c_cfg))
         if not self._engine_ptr:
             raise RuntimeError("Failed to allocate native GiantFiberEngine")
@@ -38,7 +50,9 @@ class GiantFiberCoprocessor:
             self._engine_ptr = None
 
     def __del__(self):
-        self.close()
+        import contextlib
+        with contextlib.suppress(Exception):
+            self.close()
 
     def reset(self):
         """Reset internal accumulator and neuronal states to zero."""
@@ -47,7 +61,7 @@ class GiantFiberCoprocessor:
 
     def feed_spike(self, x: int, y: int, timestamp_us: int, polarity: int = 1, raw_w: int = 320, raw_h: int = 320):
         """Feed a single asynchronous DVS event spike."""
-        pol = -1 if polarity == 0 else polarity
+        pol = -1 if polarity <= 0 else 1
         spike = C_EventSpike(
             timestamp_us=timestamp_us,
             x=x,
@@ -69,7 +83,7 @@ class GiantFiberCoprocessor:
             spike_arr[i].timestamp_us = ev.timestamp_us
             spike_arr[i].x = ev.x
             spike_arr[i].y = ev.y
-            spike_arr[i].polarity = -1 if ev.polarity == 0 else ev.polarity
+            spike_arr[i].polarity = -1 if ev.polarity <= 0 else 1
 
         self._binding.lib.gf_feed_events_batch(
             self._engine_ptr,
@@ -88,14 +102,27 @@ class GiantFiberCoprocessor:
         count = len(buffer) // spike_size
         if count == 0:
             return
+        if isinstance(buffer, (bytes, bytearray, memoryview)):
+            if isinstance(buffer, bytes):
+                # Zero-copy: the bytes object stays alive for the duration of the call.
+                ptr = ctypes.cast(ctypes.c_char_p(buffer), ctypes.POINTER(C_EventSpike))
+                self._binding.lib.gf_feed_events_batch(self._engine_ptr, ptr, count, raw_w, raw_h)
+                return
+            try:
+                raw_char_arr = (ctypes.c_char * len(buffer)).from_buffer(buffer)
+            except (TypeError, ValueError):
+                raw_char_arr = (ctypes.c_char * len(buffer)).from_buffer_copy(buffer)
+            ptr = ctypes.cast(raw_char_arr, ctypes.POINTER(C_EventSpike))
+            self._binding.lib.gf_feed_events_batch(self._engine_ptr, ptr, count, raw_w, raw_h)
+            return
         raw_char_arr = (ctypes.c_char * len(buffer)).from_buffer_copy(buffer)
         ptr = ctypes.cast(raw_char_arr, ctypes.POINTER(C_EventSpike))
         self._binding.lib.gf_feed_events_batch(self._engine_ptr, ptr, count, raw_w, raw_h)
 
     def update_imu(
         self,
-        gyro: Tuple[float, float, float],
-        accel: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        gyro: tuple[float, float, float],
+        accel: tuple[float, float, float] = (0.0, 0.0, 0.0),
         timestamp_us: int = 0,
     ):
         """Feed an IMU sample (yaw rate drives the heading integrator)."""
@@ -149,6 +176,9 @@ class GiantFiberCoprocessor:
         if res != 0:
             raise RuntimeError(f"Failed to restore engine snapshot: code {res}")
 
+        c_cfg = C_EngineConfig()
+        if self._binding.lib.gf_get_config(self._engine_ptr, ctypes.byref(c_cfg)) == 0:
+            self.config = ReflexConfig(**{name: getattr(c_cfg, name) for name, *_ in C_EngineConfig._fields_})
     def debug_state(self) -> dict:
         """Internal looming estimate, VPN activity and membrane states (for analysis/plots)."""
         st = C_GfDebugState()

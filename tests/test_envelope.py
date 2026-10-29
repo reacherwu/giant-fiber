@@ -2,8 +2,12 @@ import warnings
 
 import pytest
 
-from giantfiber.envelope import (DEFAULT_RIG, VALIDATED_MAX_CLOSING_SPEED_MPS, OutsideEnvelopeWarning,
-                                 check_threat_speed)
+from giantfiber.envelope import (
+    DEFAULT_RIG,
+    VALIDATED_MAX_CLOSING_SPEED_MPS,
+    OutsideEnvelopeWarning,
+    check_threat_speed,
+)
 
 
 def test_inside_envelope_no_warning():

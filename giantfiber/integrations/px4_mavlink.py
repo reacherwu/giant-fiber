@@ -16,16 +16,18 @@ PX4 SITL "Onboard" MAVLink instance: PX4 listens on UDP 14580 and sends to UDP 1
 """
 
 from __future__ import annotations
+
 import math
 import socket
 import struct
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Dict, Any, Callable
+from typing import Any
 
-from giantfiber.types import ReflexAction, ReflexDecision, ReflexConfig
+from typing_extensions import Self
+
 from giantfiber.engine import GiantFiberCoprocessor
-
+from giantfiber.types import ReflexAction, ReflexConfig, ReflexDecision
 
 # ============================================================================
 # Pure-Python MAVLink v2 Frame Codec (Zero-Dependency, Microsecond Speed)
@@ -49,7 +51,7 @@ def calculate_mavlink_crc(data: bytes, crc_extra: int) -> int:
 
 
 # Standard MAVLink CRC Extra Seeds for relevant message IDs
-MAVLINK_CRC_EXTRA: Dict[int, int] = {
+MAVLINK_CRC_EXTRA: dict[int, int] = {
     0: 50,    # HEARTBEAT
     82: 49,   # SET_ATTITUDE_TARGET
     84: 143,  # SET_POSITION_TARGET_LOCAL_NED
@@ -57,7 +59,7 @@ MAVLINK_CRC_EXTRA: Dict[int, int] = {
 }
 
 # Standard MAVLink Full Payload Lengths (before MAVLink 2 zero-truncation)
-MAVLINK_MESSAGE_LENGTHS: Dict[int, int] = {
+MAVLINK_MESSAGE_LENGTHS: dict[int, int] = {
     0: 9,     # HEARTBEAT
     82: 39,   # SET_ATTITUDE_TARGET
     84: 53,   # SET_POSITION_TARGET_LOCAL_NED
@@ -83,7 +85,7 @@ class MAVLinkMessage:
     compid: int = 191
     seq: int = 0
     payload: bytes = b""
-    fields: Dict[str, Any] = field(default_factory=dict)
+    fields: dict[str, Any] = field(default_factory=dict)
 
 
 class MAVLinkV2Codec:
@@ -112,10 +114,10 @@ class MAVLinkV2Codec:
         return header + msg.payload + struct.pack("<H", crc)
 
     @staticmethod
-    def decode(packet: bytes) -> Optional[MAVLinkMessage]:
+    def decode(packet: bytes) -> MAVLinkMessage | None:
         if len(packet) < 12 or packet[0] != MAVLinkV2Codec.MAGIC:
             return None
-        payload_len, incompat, compat, seq, sysid, compid = struct.unpack_from("<BBBBBB", packet, 1)
+        payload_len, _incompat, _compat, seq, sysid, compid = struct.unpack_from("<BBBBBB", packet, 1)
         msgid = int.from_bytes(packet[7:10], "little")
         total_len = 10 + payload_len + 2
         if len(packet) < total_len:
@@ -144,15 +146,15 @@ class MAVLinkV2Codec:
         )
 
     @staticmethod
-    def parse_payload(msgid: int, payload: bytes) -> Dict[str, Any]:
-        fields: Dict[str, Any] = {}
+    def parse_payload(msgid: int, payload: bytes) -> dict[str, Any]:
+        fields: dict[str, Any] = {}
         if msgid == 105 and len(payload) >= 62:  # HIGHRES_IMU
             (
                 time_usec,
                 xacc, yacc, zacc,
                 xgyro, ygyro, zgyro,
-                xmag, ymag, zmag,
-                abs_pressure, diff_pressure, pressure_alt, temperature,
+                _xmag, _ymag, _zmag,
+                _abs_pressure, _diff_pressure, _pressure_alt, temperature,
                 fields_updated,
             ) = struct.unpack("<QfffffffffffffH", payload[:62])
             fields = {
@@ -211,7 +213,7 @@ class MAVLinkV2Codec:
         target_sys: int,
         target_comp: int,
         type_mask: int,
-        q: Tuple[float, float, float, float],
+        q: tuple[float, float, float, float],
         body_roll_rate: float,
         body_pitch_rate: float,
         body_yaw_rate: float,
@@ -237,9 +239,9 @@ class MAVLinkV2Codec:
         target_sys: int,
         target_comp: int,
         type_mask: int,
-        pos: Tuple[float, float, float] = (0.0, 0.0, 0.0),
-        vel: Tuple[float, float, float] = (0.0, 0.0, 0.0),
-        acc: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        pos: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        vel: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        acc: tuple[float, float, float] = (0.0, 0.0, 0.0),
         yaw: float = 0.0,
         yaw_rate: float = 0.0,
         frame: int = MAV_FRAME_LOCAL_NED,
@@ -288,7 +290,7 @@ class PX4BridgeConfig:
     reflex_config: ReflexConfig = field(default_factory=ReflexConfig)
 
 
-def escape_acceleration_ned(decision: ReflexDecision, yaw_rad: float, cfg: "PX4BridgeConfig") -> Tuple[float, float, float]:
+def escape_acceleration_ned(decision: ReflexDecision, yaw_rad: float, cfg: PX4BridgeConfig) -> tuple[float, float, float]:
     """Acceleration setpoint (NED, m/s^2) for an escape decision.
 
     The reflex vector gives the direction in the body frame (x: -1 left / +1 right,
@@ -318,16 +320,17 @@ class PX4ReflexBridge:
     SET_POSITION_TARGET_LOCAL_NED (84) acceleration setpoint to stream while it is active.
     """
 
-    def __init__(self, config: Optional[PX4BridgeConfig] = None):
+    def __init__(self, config: PX4BridgeConfig | None = None):
         self.config = config or PX4BridgeConfig()
         self.coprocessor = GiantFiberCoprocessor(self.config.reflex_config)
-        self.sock: Optional[socket.socket] = None
+        self.sock: socket.socket | None = None
         self.seq = 0
         self.total_imu_ingested = 0
         self.total_overrides_dispatched = 0
-        self.last_decision: Optional[ReflexDecision] = None
+        self.last_decision: ReflexDecision | None = None
         self.is_connected = False
         self.yaw_rad = 0.0
+        self._last_imu_time_us = 0
         self.evasion_until_s = 0.0
         self.evasion_acc = (0.0, 0.0, 0.0)
 
@@ -350,30 +353,37 @@ class PX4ReflexBridge:
         self.is_connected = False
         self.coprocessor.close()
 
-    def __enter__(self) -> "PX4ReflexBridge":
+    def __enter__(self) -> Self:
         self.connect()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    def handle_message(self, msg: MAVLinkMessage) -> Optional[ReflexDecision]:
+    def handle_message(self, msg: MAVLinkMessage) -> ReflexDecision | None:
         """Processes a decoded MAVLinkMessage and updates internal state."""
         if msg.msgid == 105:  # HIGHRES_IMU
             f = msg.fields
             if "xgyro" in f and "ygyro" in f and "zgyro" in f and "xacc" in f and "yacc" in f and "zacc" in f:
                 self.total_imu_ingested += 1
+                ts = int(f.get("time_usec", 0))
+                # Keep the bridge yaw aligned with the IMU so escape setpoints are
+                # rotated into the correct NED direction even without an external caller.
+                if self._last_imu_time_us and ts > self._last_imu_time_us:
+                    dt = (ts - self._last_imu_time_us) * 1e-6
+                    self.yaw_rad = (self.yaw_rad + float(f["zgyro"]) * dt + math.pi) % (2 * math.pi) - math.pi
+                self._last_imu_time_us = ts
                 # Ingest angular rates (rad/s) and linear accelerations (m/s^2)
                 self.coprocessor.update_imu(
                     gyro=(f["xgyro"], f["ygyro"], f["zgyro"]),
                     accel=(f["xacc"], f["yacc"], f["zacc"]),
-                    timestamp_us=f.get("time_usec", 0),
+                    timestamp_us=ts,
                 )
         return None
 
     handle_mavlink_message = handle_message
 
-    def handle_incoming_bytes(self, data: bytes) -> Optional[ReflexDecision]:
+    def handle_incoming_bytes(self, data: bytes) -> ReflexDecision | None:
         """
         Parses incoming MAVLink bytes from PX4 and updates internal state.
         Returns latest reflex decision if an evaluation occurred.
@@ -387,7 +397,7 @@ class PX4ReflexBridge:
         """Feeds a microsecond DVS event spike into the bio-reflex coprocessor."""
         self.coprocessor.feed_spike(x, y, timestamp_us, polarity)
 
-    def step_eval(self, now_us: int, wall_time_s: Optional[float] = None) -> ReflexDecision:
+    def step_eval(self, now_us: int, wall_time_s: float | None = None) -> ReflexDecision:
         """Runs one engine step. On an escape decision, starts (or upgrades) the evasion
         and sends the first acceleration setpoint immediately."""
         decision = self.coprocessor.step_eval(now_us)
@@ -399,7 +409,7 @@ class PX4ReflexBridge:
             self.send(self.evasion_packet())
         return decision
 
-    def evasion_active(self, wall_time_s: Optional[float] = None) -> bool:
+    def evasion_active(self, wall_time_s: float | None = None) -> bool:
         now = time.monotonic() if wall_time_s is None else wall_time_s
         return now < self.evasion_until_s
 
@@ -486,7 +496,7 @@ class PX4ReflexBridge:
         if self.sock and self.is_connected:
             try:
                 self.sock.sendto(packet, (self.config.px4_ip, self.config.px4_port))
-            except (OSError, socket.error):
+            except OSError:
                 pass
 
         return packet

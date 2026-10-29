@@ -186,7 +186,7 @@ class EventCamera:
 # latency < 100 us at 1000 lx and < 1000 us at 5 lx, background rate <= 0.1 Hz/px at 1000 lx and
 # <= 10 Hz/px at 5 lx (Sony IMX636-AAMR-C flyer). With an 8 mm lens the horizontal FOV is
 # 2*atan(1280*4.86e-3/2/8) = 42.5 deg (24.6 deg vertical).
-IMX636 = dict(width=1280, height=720, pixel_um=4.86, lens_mm=8.0)
+IMX636 = {"width": 1280, "height": 720, "pixel_um": 4.86, "lens_mm": 8.0}
 
 
 def imx636_hfov_deg(lens_mm=8.0):

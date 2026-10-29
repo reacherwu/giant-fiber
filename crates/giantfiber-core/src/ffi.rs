@@ -94,6 +94,19 @@ pub unsafe extern "C" fn gf_engine_reset(engine: *mut GiantFiberEngine) {
 
 #[no_mangle]
 /// # Safety
+/// Pointers must be valid; `engine` must come from `gf_engine_new`; `out` must be valid.
+#[allow(clippy::missing_safety_doc)]
+pub unsafe extern "C" fn gf_get_config(engine: *const GiantFiberEngine, out: *mut EngineConfig) -> i32 {
+    if let (Some(eng), Some(o)) = (engine.as_ref(), out.as_mut()) {
+        *o = eng.config;
+        0
+    } else {
+        -1
+    }
+}
+
+#[no_mangle]
+/// # Safety
 /// Pointers must be valid; `engine` must come from `gf_engine_new`.
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn gf_feed_event(

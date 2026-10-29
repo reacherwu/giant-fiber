@@ -21,6 +21,34 @@ Python SDK, a PX4 offboard bridge, a CAN-FD frame and a Verilog prototype of the
 
 ---
 
+## Quick start
+
+```bash
+cargo build --release
+pip install -r requirements-dev.txt
+cargo test && python3 -m pytest tests -q
+python3 examples/looming_demo.py
+```
+
+```python
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
+with GiantFiberCoprocessor(ReflexConfig()) as gf:
+    gf.feed_raw_spikes(buf)   # numpy array of giantfiber.sim.events.EVENT_DTYPE
+    d = gf.step_eval(now_us)  # ReflexDecision
+```
+
+## Contents
+
+- [Safety envelope](#safety-envelope)
+- [What it does](#what-it-does)
+- [Model validation](#model-validation-synthetic-stimuli)
+- [PX4 SITL campaigns](#px4-sitl-campaign-v4-final-held-out-3x3-tiled-25-mm-imx636-rig-6120-ms)
+- [Performance](#performance)
+- [Components](#components)
+- [Quick start](#quick-start)
+- [Roadmap](#roadmap)
+- [References](#references)
+
 ## Safety envelope
 
 **Validated range: closing speed ≤ 30 m/s, in simulation only.** This has not been flight-tested or
@@ -460,7 +488,7 @@ These are desktop-CPU numbers. They say nothing about a microcontroller, and no 
 The EVT2/EVT3 decoders follow the published Prophesee word formats. They have only been tested on
 synthetic words, not on recordings from a real sensor.
 
-## Quick start
+## Quick start (detailed)
 
 ```bash
 cargo build --release

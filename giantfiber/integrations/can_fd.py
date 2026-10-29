@@ -10,15 +10,15 @@ CAN-FD reflex frame codec and Linux SocketCAN transport.
 """
 
 from __future__ import annotations
+
 import math
 import socket
 import struct
 import sys
 import time
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
-from giantfiber.types import ReflexAction, ReflexDecision, ReflexVector
+from giantfiber.types import ReflexAction, ReflexDecision
 
 
 def crc16_ccitt(data: bytes) -> int:
@@ -115,7 +115,7 @@ class CANFDCodec:
         return header + struct.pack("<H", crc)
 
     @staticmethod
-    def decode(payload: bytes, can_id: int = 0x18F02001) -> Optional[CANFDReflexFrame]:
+    def decode(payload: bytes, can_id: int = 0x18F02001) -> CANFDReflexFrame | None:
         if len(payload) < CANFDCodec.FRAME_LEN:
             return None
         if payload[:2] != CANFDCodec.MAGIC:
@@ -128,7 +128,7 @@ class CANFDCodec:
             return None
 
         (
-            magic,
+            _magic,
             seq,
             action_raw,
             conf_u8,
@@ -161,7 +161,7 @@ class CANFDCodec:
         )
 
     @staticmethod
-    def from_decision(decision: ReflexDecision, seq: int = 0, timestamp_ms: Optional[int] = None) -> CANFDReflexFrame:
+    def from_decision(decision: ReflexDecision, seq: int = 0, timestamp_ms: int | None = None) -> CANFDReflexFrame:
         """Converts high-level ReflexDecision into physical CAN-FD frame setpoint."""
         roll_rate = 0.0
         pitch_rate = 0.0
@@ -212,7 +212,7 @@ def pack_canfd_frame(can_id: int, data: bytes, extended: bool = True, flags: int
     return struct.pack(_CANFD_FRAME_FMT, cid, len(data), flags, 0, 0, data.ljust(64, b"\x00"))
 
 
-def unpack_canfd_frame(raw: bytes) -> Tuple[int, bytes]:
+def unpack_canfd_frame(raw: bytes) -> tuple[int, bytes]:
     cid, length, _flags, _r0, _r1, data = struct.unpack(_CANFD_FRAME_FMT, raw[:CANFD_MTU])
     return cid & CAN_EFF_MASK, data[:length]
 
@@ -224,8 +224,8 @@ class SocketCANFDBus:
     def __init__(self, interface: str = "vcan0", can_id: int = 0x18F02001):
         if not sys.platform.startswith("linux") or not hasattr(socket, "AF_CAN"):
             raise OSError("SocketCAN is only available on Linux")
-        self.can_id = can_id
-        self.sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+        self.can_id: int = can_id
+        self.sock: socket.socket = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
         self.sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)
         self.sock.bind((interface,))
 
@@ -238,7 +238,7 @@ class SocketCANFDBus:
         self.send_frame(frame)
         return frame
 
-    def recv_frame(self, timeout_s: float = 1.0) -> Optional[CANFDReflexFrame]:
+    def recv_frame(self, timeout_s: float = 1.0) -> CANFDReflexFrame | None:
         self.sock.settimeout(timeout_s)
         try:
             raw = self.sock.recv(CANFD_MTU)

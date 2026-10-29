@@ -202,7 +202,10 @@ impl GiantFiberCircuit {
         self.nongf_threshold = cfg.nongf_threshold;
         self.refractory_us = cfg.refractory_period_us;
 
-        let dt_us = if self.last_step_us == 0 || now_us <= self.last_step_us {
+        let dt_us = if self.last_step_us == 0 {
+            // First step: assume a 1 ms step so membranes can integrate.
+            1000.0
+        } else if now_us <= self.last_step_us {
             0.0
         } else {
             ((now_us - self.last_step_us) as f32).min(50_000.0)

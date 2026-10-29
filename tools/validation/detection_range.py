@@ -10,14 +10,14 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from giantfiber import GiantFiberCoprocessor, ReflexConfig  # noqa: E402
-from giantfiber.sim.events import EventCamera  # noqa: E402
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
+from giantfiber.sim.events import EventCamera
 
 R = 0.15
 PRESETS = {
-    "drone (SITL preset)": dict(fov_deg=60.0, lplc2_half_size_deg=4.0, lc4_half_velocity_dps=20.0),
-    "lower thresholds": dict(fov_deg=60.0, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0, min_edge_cells=4),
-    "30 deg FOV": dict(fov_deg=30.0, lplc2_half_size_deg=2.0, lc4_half_velocity_dps=10.0),
+    "drone (SITL preset)": {"fov_deg": 60.0, "lplc2_half_size_deg": 4.0, "lc4_half_velocity_dps": 20.0},
+    "lower thresholds": {"fov_deg": 60.0, "lplc2_half_size_deg": 1.5, "lc4_half_velocity_dps": 5.0, "min_edge_cells": 4},
+    "30 deg FOV": {"fov_deg": 30.0, "lplc2_half_size_deg": 2.0, "lc4_half_velocity_dps": 10.0},
 }
 
 

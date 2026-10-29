@@ -99,7 +99,7 @@ impl CentralComplexCircuit {
     }
 
     /// Decode the current heading angle using population vector averaging.
-    fn decode_heading(&mut self) {
+    pub fn decode_heading(&mut self) {
         let step = (2.0 * PI) / (NUM_WEDGES as f32);
         let mut sin_sum = 0.0f32;
         let mut cos_sum = 0.0f32;

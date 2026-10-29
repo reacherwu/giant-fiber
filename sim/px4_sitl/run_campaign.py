@@ -35,9 +35,12 @@ from pymavlink import mavutil
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, ROOT)
-from giantfiber import ReflexConfig  # noqa: E402
-from giantfiber.integrations.px4_mavlink import PX4ReflexBridge, PX4BridgeConfig  # noqa: E402
-from giantfiber.sim.events import EventCamera, world_to_cam  # noqa: E402
+from giantfiber import ReflexConfig
+from giantfiber.integrations.px4_mavlink import (
+    PX4BridgeConfig,
+    PX4ReflexBridge,
+)
+from giantfiber.sim.events import EventCamera, world_to_cam
 
 R_OBJ = 0.15        # object radius (m)
 R_VEHICLE = 0.25    # vehicle radius used for the collision test (m)
@@ -48,15 +51,15 @@ EARTH_R = 6378137.0
 
 PRESETS = {
     # Engine defaults (fly-scale angular thresholds, 90 deg camera)
-    "fly": dict(),
+    "fly": {},
     # Same circuit, thresholds scaled down for a 60 deg camera so it fires earlier (documented in README)
-    "drone": dict(fov_deg=60.0, lplc2_half_size_deg=4.0, lc4_half_velocity_dps=20.0),
+    "drone": {"fov_deg": 60.0, "lplc2_half_size_deg": 4.0, "lc4_half_velocity_dps": 20.0},
     # v2 (2026-10-19 PM): lower angular thresholds, chosen offline on head-on synthetic approaches
     # (tools/validation/detection_range.py), not on these SITL geometries.
-    "drone2": dict(fov_deg=60.0, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0),
+    "drone2": {"fov_deg": 60.0, "lplc2_half_size_deg": 1.5, "lc4_half_velocity_dps": 5.0},
     # v2 detection + thrust-axis escape held for 0.8 s (chosen from the SITL step-response test)
-    "drone2v": dict(fov_deg=60.0, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0,
-                    _bridge=dict(escape_policy="vertical", evade_duration_s=0.8)),
+    "drone2v": {"fov_deg": 60.0, "lplc2_half_size_deg": 1.5, "lc4_half_velocity_dps": 5.0,
+                    "_bridge": {"escape_policy": "vertical", "evade_duration_s": 0.8}},
 }
 
 
@@ -89,8 +92,8 @@ class Vehicle:
                 n = math.radians(lat - self.ref[0]) * EARTH_R
                 e = math.radians(lon - self.ref[1]) * EARTH_R * math.cos(math.radians(self.ref[0]))
                 d = -(alt - self.ref[2])
-                self.gt = dict(p=np.array([n, e, d]), v=np.array([msg.vx, msg.vy, msg.vz]) * 0.01,
-                               q=tuple(msg.attitude_quaternion), t=now)
+                self.gt = {"p": np.array([n, e, d]), "v": np.array([msg.vx, msg.vy, msg.vz]) * 0.01,
+                               "q": tuple(msg.attitude_quaternion), "t": now}
                 self.gt_samples += 1
             elif ty == "LOCAL_POSITION_NED":
                 self.local = (msg.x, msg.y, msg.z)
@@ -239,10 +242,10 @@ def run_trial(veh, arm, cfg_name, trial, out_dir, rng, noise_hz, trace=True):
                 veh.m.write(bridge.dispatch_evasion_override(dec))
                 send_t = send_t or time.perf_counter()
             closing = trial.get("speed_mps", float("nan"))
-            trig.append(dict(t=t, mode=int(dec.escape_mode), action=dec.action.name,
-                             dist=d, ttc_ms=(d - HIT_DIST) / closing * 1e3 if start is not None else float("nan"),
-                             compute_us=dec.compute_latency_us,
-                             detect_to_send_us=(time.perf_counter() - t_eval0) * 1e6))
+            trig.append({"t": t, "mode": int(dec.escape_mode), "action": dec.action.name,
+                             "dist": d, "ttc_ms": (d - HIT_DIST) / closing * 1e3 if start is not None else float("nan"),
+                             "compute_us": dec.compute_latency_us,
+                             "detect_to_send_us": (time.perf_counter() - t_eval0) * 1e6})
         # Command streaming
         if arm == "reflex" and bridge.evasion_active(time.perf_counter()):
             if time.perf_counter() - last_ev_sp > 0.01:
@@ -318,15 +321,15 @@ def build_plan(args, rng):
                 for az in azs:
                     for el in els:
                         for dist in dists:
-                            plan.append(dict(id=f"{i:04d}", kind="threat", arm=arm, cfg=cfg_name, speed_mps=v,
-                                             az_deg=az, el_deg=el, dist_m=dist,
-                                             aim_err_m=round(math.sqrt(rng.random()) * args.aim_err, 3)))
+                            plan.append({"id": f"{i:04d}", "kind": "threat", "arm": arm, "cfg": cfg_name, "speed_mps": v,
+                                             "az_deg": az, "el_deg": el, "dist_m": dist,
+                                             "aim_err_m": round(math.sqrt(rng.random()) * args.aim_err, 3)})
                             i += 1
     for r in range(args.controls):
-        plan.append(dict(id=f"{i:04d}", kind="no_object", arm="reflex", cfg=args.control_cfg, duration_s=8.0)); i += 1
-        plan.append(dict(id=f"{i:04d}", kind="flyby", arm="reflex", cfg=args.control_cfg, speed_mps=rng.choice(speeds),
-                         az_deg=rng.choice(azs), el_deg=0.0, dist_m=rng.choice(dists),
-                         miss_m=round(rng.uniform(2.5, 4.0), 2))); i += 1
+        plan.append({"id": f"{i:04d}", "kind": "no_object", "arm": "reflex", "cfg": args.control_cfg, "duration_s": 8.0}); i += 1
+        plan.append({"id": f"{i:04d}", "kind": "flyby", "arm": "reflex", "cfg": args.control_cfg, "speed_mps": rng.choice(speeds),
+                         "az_deg": rng.choice(azs), "el_deg": 0.0, "dist_m": rng.choice(dists),
+                         "miss_m": round(rng.uniform(2.5, 4.0), 2)}); i += 1
     rng.shuffle(plan)
     return plan
 
@@ -377,8 +380,8 @@ def main():
             w = csv.DictWriter(f, fieldnames=keys)
             w.writeheader()
             w.writerows(results)
-    meta = dict(started_unix=t_start, finished_unix=time.time(), args=vars(args), r_obj=R_OBJ, r_vehicle=R_VEHICLE,
-                hover_alt=HOVER_ALT, loop_dt=LOOP_DT, presets=PRESETS, gt_samples=veh.gt_samples)
+    meta = {"started_unix": t_start, "finished_unix": time.time(), "args": vars(args), "r_obj": R_OBJ, "r_vehicle": R_VEHICLE,
+                "hover_alt": HOVER_ALT, "loop_dt": LOOP_DT, "presets": PRESETS, "gt_samples": veh.gt_samples}
     with open(os.path.join(args.out, "campaign_meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
 

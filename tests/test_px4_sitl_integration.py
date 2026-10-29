@@ -5,17 +5,18 @@ Integration tests for PX4-Autopilot MAVLink Bridge and SITL Evasion
 import math
 import struct
 import unittest
+
+from _stimuli import run_loom
+
 from giantfiber import EscapeMode, ReflexAction, ReflexDecision, ReflexVector
 from giantfiber.integrations.px4_mavlink import (
     POSITION_TARGET_TYPEMASK_ACCEL_ONLY,
-    MAVLinkV2Codec,
     MAVLinkMessage,
-    PX4ReflexBridge,
+    MAVLinkV2Codec,
     PX4BridgeConfig,
+    PX4ReflexBridge,
     escape_acceleration_ned,
 )
-
-from _stimuli import run_loom
 
 
 class TestPX4MAVLinkIntegration(unittest.TestCase):

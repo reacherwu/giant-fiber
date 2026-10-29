@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Analyse campaign v3 (docs/sim_v3/s*/trials.csv). Every number is computed from the CSV files."""
-import argparse, glob, gzip, json, math, os
+import argparse
+import glob
+import json
+import math
+import os
+
+import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib import animation  # noqa: E402
+import matplotlib.pyplot as plt
+from matplotlib import animation
 
 NARROW_HALF = (math.degrees(math.atan(1280 * 4.86e-3 / 2 / 25)), math.degrees(math.atan(720 * 4.86e-3 / 2 / 25)))
 
@@ -69,10 +75,10 @@ def tier_table(df):
             k, n = int(g.hit.sum()), len(g)
             lo, hi = wilson(k, n)
             det = g[g.pre_ca_trigger]
-            row = dict(speed_mps=v, arm=arm, n=n, hits=k, rate=k / n if n else float("nan"), ci_lo=lo, ci_hi=hi,
-                       detected=int(len(det)), median_trigger_ttc_ms=float(det.trigger_ttc_ms.median()) if len(det) else None,
-                       p10_trigger_ttc_ms=float(det.trigger_ttc_ms.quantile(0.1)) if len(det) else None,
-                       median_trigger_dist_m=float(det.trigger_dist_m.median()) if len(det) else None)
+            row = {"speed_mps": v, "arm": arm, "n": n, "hits": k, "rate": k / n if n else float("nan"), "ci_lo": lo, "ci_hi": hi,
+                       "detected": len(det), "median_trigger_ttc_ms": float(det.trigger_ttc_ms.median()) if len(det) else None,
+                       "p10_trigger_ttc_ms": float(det.trigger_ttc_ms.quantile(0.1)) if len(det) else None,
+                       "median_trigger_dist_m": float(det.trigger_dist_m.median()) if len(det) else None}
             if arm == "reflex":
                 for name, sub in (("in_narrow", g[g.in_narrow]), ("out_narrow", g[~g.in_narrow])):
                     kk, nn = int(sub.hit.sum()), len(sub)
@@ -89,9 +95,9 @@ def controls(df):
         g = df[df.kind == kind]
         k_any = int((g.triggered == 1).sum())
         k_pre = int(g.pre_ca_trigger.sum())
-        out[kind] = dict(n=len(g), any_trigger=k_any, ci95_upper_any=wilson(k_any, len(g))[1] if len(g) else None,
-                         pre_closest_approach_trigger=k_pre,
-                         by_src={s: int(((g.triggered == 1) & (g.trigger_src == s)).sum()) for s in ("farfield", "gf")})
+        out[kind] = {"n": len(g), "any_trigger": k_any, "ci95_upper_any": wilson(k_any, len(g))[1] if len(g) else None,
+                         "pre_closest_approach_trigger": k_pre,
+                         "by_src": {s: int(((g.triggered == 1) & (g.trigger_src == s)).sum()) for s in ("farfield", "gf")}}
         if kind == "flyby":
             out[kind]["flyby_hits"] = int(pd.to_numeric(g.hit, errors="coerce").sum())
     return out
@@ -136,8 +142,8 @@ def gif(d, row, path, fps=20):
     if len(tr) < 5:
         return False
     tr = tr.iloc[::2]
-    dn, de, dd = tr.drone_n.values, tr.drone_e.values, tr.drone_d.values
-    on, oe, od = tr.obj_n.values, tr.obj_e.values, tr.obj_d.values
+    dn, _de, dd = tr.drone_n.values, tr.drone_e.values, tr.drone_d.values
+    on, _oe, od = tr.obj_n.values, tr.obj_e.values, tr.obj_d.values
     fig, ax = plt.subplots(figsize=(5, 4))
     span = 6.0
     def upd(i):
@@ -166,10 +172,10 @@ def main():
     tt.to_csv(os.path.join(a.dir, "summary_by_tier.csv"), index=False)
     ctl = controls(df)
     th = df[(df.kind == "threat") & (df.arm == "reflex") & df.pre_ca_trigger]
-    summary = dict(n_trials=len(df), excluded_after_battery_failsafe=df.attrs.get("excluded_after_failsafe"), tiers=tt.to_dict("records"), controls=ctl,
-                   compute_us_median=float(th.compute_us.median()), compute_us_p95=float(th.compute_us.quantile(0.95)),
-                   response_ms_median=float(th.response_ms.median()), loop_hz_median=float(df.loop_hz.median()),
-                   loop_hz_min=float(df.loop_hz.min()), settled_fraction=float(df.settled.mean()))
+    summary = {"n_trials": len(df), "excluded_after_battery_failsafe": df.attrs.get("excluded_after_failsafe"), "tiers": tt.to_dict("records"), "controls": ctl,
+                   "compute_us_median": float(th.compute_us.median()), "compute_us_p95": float(th.compute_us.quantile(0.95)),
+                   "response_ms_median": float(th.response_ms.median()), "loop_hz_median": float(df.loop_hz.median()),
+                   "loop_hz_min": float(df.loop_hz.min()), "settled_fraction": float(df.settled.mean())}
     json.dump(summary, open(os.path.join(a.dir, "summary.json"), "w"), indent=1, default=float)
     plot_rates(tt, os.path.join(a.dir, "collision_rate_by_tier.png"))
     plot_ttc(df, os.path.join(a.dir, "trigger_ttc_by_speed.png"))

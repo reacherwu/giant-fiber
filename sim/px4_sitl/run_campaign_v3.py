@@ -17,18 +17,39 @@ Differences from run_campaign.py (v1/v2):
 - No return-to-origin between trials: the vehicle holds where the previous trial ended (altitude
   reset to 10 m) and each object is launched relative to the vehicle's current pose.
 """
-import argparse, csv, gzip, json, math, os, random, sys, time
+import argparse
+import csv
+import gzip
+import json
+import math
+import os
+import random
+import sys
+import time
+
 import numpy as np
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(__file__))
-from pymavlink import mavutil  # noqa: E402
-from run_campaign import Vehicle, unit_from_az_el, HIT_DIST, R_OBJ, HOVER_ALT  # noqa: E402
-from giantfiber import GiantFiberCoprocessor, ReflexConfig  # noqa: E402
-from giantfiber.farfield import FarFieldTTC, FarFieldConfig, Derotator  # noqa: E402
-from giantfiber.sim.events import imx636_camera, world_to_cam, quat_to_rot, mount_rotation  # noqa: E402
-from giantfiber.filters import BackgroundActivityFilter  # noqa: E402
+from pymavlink import mavutil
+from run_campaign import (
+    HIT_DIST,
+    HOVER_ALT,
+    R_OBJ,
+    Vehicle,
+    unit_from_az_el,
+)
+
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
+from giantfiber.farfield import Derotator, FarFieldConfig, FarFieldTTC
+from giantfiber.filters import BackgroundActivityFilter
+from giantfiber.sim.events import (
+    imx636_camera,
+    mount_rotation,
+    quat_to_rot,
+    world_to_cam,
+)
 
 LOOP_DT = 0.002
 LENSES_MM = (8.0, 25.0)
@@ -39,8 +60,8 @@ RIGS = {"dual": [(8.0, 0.0, 0.0), (25.0, 0.0, 0.0)],
         # 3x3 grid of 25 mm IMX636 tiles (HFOV 14.2 deg, VFOV 8.0 deg; 12 / 7 deg spacing) covering
         # +-19.1 x +-11.0 deg at 25 mm resolution, plus the 8 mm wide camera (index 0)
         "tiled9": [(8.0, 0.0, 0.0)] + [(25.0, y, p) for p in (7.0, 0.0, -7.0) for y in (-12.0, 0.0, 12.0)]}
-FF_CFG = dict(tau_arm_s=1.0, min_fit_span_us=150000, min_t_stat=8.0, confirm_evals=15, max_miss_radii=6.0, tau_min_s=0.15)
-GF_PRESET = dict(fov_deg=42.5, lplc2_half_size_deg=1.5, lc4_half_velocity_dps=5.0)
+FF_CFG = {"tau_arm_s": 1.0, "min_fit_span_us": 150000, "min_t_stat": 8.0, "confirm_evals": 15, "max_miss_radii": 6.0, "tau_min_s": 0.15}
+GF_PRESET = {"fov_deg": 42.5, "lplc2_half_size_deg": 1.5, "lc4_half_velocity_dps": 5.0}
 LATENCY_US = 2000
 BAF_US = 2000
 
@@ -70,8 +91,8 @@ class V3Vehicle(Vehicle):
                 n = math.radians(lat - self.ref[0]) * 6378137.0
                 e = math.radians(lon - self.ref[1]) * 6378137.0 * math.cos(math.radians(self.ref[0]))
                 d = -(alt - self.ref[2])
-                self.gt = dict(p=np.array([n, e, d]), v=np.array([msg.vx, msg.vy, msg.vz]) * 0.01,
-                               q=tuple(msg.attitude_quaternion), t=now)
+                self.gt = {"p": np.array([n, e, d]), "v": np.array([msg.vx, msg.vy, msg.vz]) * 0.01,
+                               "q": tuple(msg.attitude_quaternion), "t": now}
                 self.gt_samples += 1
             elif ty == "LOCAL_POSITION_NED":
                 self.local = (msg.x, msg.y, msg.z)
@@ -187,8 +208,8 @@ def run_trial(veh, trial, rng, args, out_dir):
             else:
                 o = outs[0]
                 climb = dec.vector.y >= 0.0
-            trig = dict(t=t, dist=d_now, src=src, tau=o["tau_s"], miss=o["miss_radii"], climb=int(climb),
-                        cam=outs.index(o) if armed else 0, compute_us=compute_us)
+            trig = {"t": t, "dist": d_now, "src": src, "tau": o["tau_s"], "miss": o["miss_radii"], "climb": int(climb),
+                        "cam": outs.index(o) if armed else 0, "compute_us": compute_us}
             if arm == "reflex":
                 acc = accel_sp(climb, args.accel)
                 escape_until = t + args.escape_s
@@ -247,17 +268,17 @@ def build_plan(args, rng):
         for arm, n in (("reflex", args.n_reflex), ("baseline", args.n_baseline)):
             for _ in range(n):
                 lo, hi = TIER_DIST[v]
-                plan.append(dict(kind="threat", arm=arm, speed_mps=float(v), dist_m=round(rng.uniform(lo, hi), 2),
-                                 az_deg=round(rng.uniform(-15, 15), 2), el_deg=round(rng.uniform(-8, 8), 2),
-                                 aim_err_m=round(rng.uniform(0, 0.15), 3)))
+                plan.append({"kind": "threat", "arm": arm, "speed_mps": float(v), "dist_m": round(rng.uniform(lo, hi), 2),
+                                 "az_deg": round(rng.uniform(-15, 15), 2), "el_deg": round(rng.uniform(-8, 8), 2),
+                                 "aim_err_m": round(rng.uniform(0, 0.15), 3)})
     for _ in range(args.controls):
-        plan.append(dict(kind="no_object", arm="reflex", duration_s=8.0))
-        plan.append(dict(kind="noise", arm="reflex", duration_s=8.0, noise_hz=args.noise_control_hz))
+        plan.append({"kind": "no_object", "arm": "reflex", "duration_s": 8.0})
+        plan.append({"kind": "noise", "arm": "reflex", "duration_s": 8.0, "noise_hz": args.noise_control_hz})
         v = float(rng.choice(tiers))
         lo, hi = TIER_DIST[int(v)]
-        plan.append(dict(kind="flyby", arm="reflex", speed_mps=v, dist_m=round(rng.uniform(lo, hi), 2),
-                         az_deg=round(rng.uniform(-15, 15), 2), el_deg=round(rng.uniform(-8, 8), 2),
-                         miss_m=round(rng.uniform(2.5, 6.0), 2)))
+        plan.append({"kind": "flyby", "arm": "reflex", "speed_mps": v, "dist_m": round(rng.uniform(lo, hi), 2),
+                         "az_deg": round(rng.uniform(-15, 15), 2), "el_deg": round(rng.uniform(-8, 8), 2),
+                         "miss_m": round(rng.uniform(2.5, 6.0), 2)})
     rng.shuffle(plan)
     for i, p in enumerate(plan):
         p["id"] = f"{args.shard}-{i:04d}"
@@ -312,9 +333,9 @@ def main():
         with open(os.path.join(out_dir, "trials.csv"), "w", newline="") as f:
             wr = csv.DictWriter(f, fieldnames=keys); wr.writeheader(); wr.writerows(results)
     with open(os.path.join(out_dir, "campaign_meta.json"), "w") as f:
-        json.dump(dict(started_unix=t_start, finished_unix=time.time(), args=vars(args), rig=RIGS[args.rig],
-                       ff_cfg=FF_CFG, gf_preset=GF_PRESET, baf_us=BAF_US, gf_gate='t_stat>4 and 0<tau<2 s on either camera', latency_us=LATENCY_US, loop_dt=LOOP_DT,
-                       r_obj=R_OBJ, hit_dist=HIT_DIST), f, indent=2)
+        json.dump({"started_unix": t_start, "finished_unix": time.time(), "args": vars(args), "rig": RIGS[args.rig],
+                       "ff_cfg": FF_CFG, "gf_preset": GF_PRESET, "baf_us": BAF_US, "gf_gate": 't_stat>4 and 0<tau<2 s on either camera', "latency_us": LATENCY_US, "loop_dt": LOOP_DT,
+                       "r_obj": R_OBJ, "hit_dist": HIT_DIST}, f, indent=2)
 
 
 if __name__ == "__main__":

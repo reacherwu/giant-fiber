@@ -13,8 +13,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from giantfiber import EscapeMode, GiantFiberCoprocessor, ReflexConfig  # noqa: E402
-from giantfiber.sim.events import EventCamera  # noqa: E402
+from giantfiber import EscapeMode, GiantFiberCoprocessor, ReflexConfig
+from giantfiber.sim.events import EventCamera
 
 
 def main():

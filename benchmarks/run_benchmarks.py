@@ -25,27 +25,30 @@ import numpy as np
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
-from giantfiber import GiantFiberCoprocessor, ReflexConfig  # noqa: E402
-from giantfiber.integrations.can_fd import CANFDCodec, CANFDReflexFrame  # noqa: E402
-from giantfiber.integrations.px4_mavlink import (  # noqa: E402
-    POSITION_TARGET_TYPEMASK_ACCEL_ONLY, MAVLinkMessage, MAVLinkV2Codec)
-from giantfiber.sensors.prophesee_evt import PropheseeEVT2Decoder  # noqa: E402
-from giantfiber.sim.events import EVENT_DTYPE, EventCamera  # noqa: E402
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
+from giantfiber.integrations.can_fd import CANFDCodec, CANFDReflexFrame
+from giantfiber.integrations.px4_mavlink import (
+    POSITION_TARGET_TYPEMASK_ACCEL_ONLY,
+    MAVLinkMessage,
+    MAVLinkV2Codec,
+)
+from giantfiber.sensors.prophesee_evt import PropheseeEVT2Decoder
+from giantfiber.sim.events import EVENT_DTYPE, EventCamera
 
 RESULTS = {"checks": []}
 
 
 def check(name, value, op, target, unit):
     ok = value < target if op == "<" else value > target if op == ">" else value == target
-    RESULTS["checks"].append(dict(name=name, value=value, op=op, target=target, unit=unit, passed=bool(ok)))
+    RESULTS["checks"].append({"name": name, "value": value, "op": op, "target": target, "unit": unit, "passed": bool(ok)})
     print(f"  {'PASS' if ok else 'FAIL'}  {name}: {value:,.3f} {unit} (target {op} {target:,} {unit})")
     return ok
 
 
 def pcts(a):
     a = np.asarray(a, dtype=float)
-    return dict(mean=float(a.mean()), p50=float(np.percentile(a, 50)), p99=float(np.percentile(a, 99)),
-                max=float(a.max()), n=int(a.size))
+    return {"mean": float(a.mean()), "p50": float(np.percentile(a, 50)), "p99": float(np.percentile(a, 99)),
+                "max": float(a.max()), "n": int(a.size)}
 
 
 def machine():
@@ -58,7 +61,7 @@ def machine():
     except OSError:
         pass
     rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
-    return dict(cpu=cpu, cores=os.cpu_count(), os=platform.platform(), python=platform.python_version(), rustc=rustc)
+    return {"cpu": cpu, "cores": os.cpu_count(), "os": platform.platform(), "python": platform.python_version(), "rustc": rustc}
 
 
 def native(quick):
@@ -148,7 +151,7 @@ def protocol(quick):
     t0 = time.perf_counter()
     spikes = dec.decode_buffer(words.tobytes())
     evt_rate = len(spikes) / (time.perf_counter() - t0)
-    RESULTS["protocol"] = dict(mavlink84_encode_us=mav_us, canfd_encode_decode_us=can_us, evt2_decode_events_per_s=evt_rate)
+    RESULTS["protocol"] = {"mavlink84_encode_us": mav_us, "canfd_encode_decode_us": can_us, "evt2_decode_events_per_s": evt_rate}
     print(f"  MAVLink #84 pack+encode {mav_us:.2f} us; CAN-FD encode+decode {can_us:.2f} us; EVT2 decode {evt_rate / 1e6:.2f} M events/s (Python)")
     check("MAVLink setpoint encode", mav_us, "<", 100, "us")
 
@@ -164,7 +167,7 @@ def noise(quick):
             if len(ev):
                 gf.feed_raw_spikes(ev.tobytes())
             trig += gf.step_eval(k * 1000 + 1000).triggered
-    RESULTS["noise"] = dict(seconds=secs, rate_hz_per_px=1.0, triggers=trig)
+    RESULTS["noise"] = {"seconds": secs, "rate_hz_per_px": 1.0, "triggers": trig}
     print(f"  {trig} triggers in {secs} s of 1 Hz/px noise (320x320 -> ~102k events/s)")
     check("noise-only triggers", trig, "==", 0, "")
 

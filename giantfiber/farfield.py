@@ -2,8 +2,17 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes import POINTER, Structure, c_float, c_size_t, c_uint16, c_uint32, c_uint64, c_void_p
-from dataclasses import dataclass, asdict
+from ctypes import (
+    POINTER,
+    Structure,
+    c_float,
+    c_size_t,
+    c_uint16,
+    c_uint32,
+    c_uint64,
+    c_void_p,
+)
+from dataclasses import asdict, dataclass
 
 import numpy as np
 
@@ -108,13 +117,17 @@ class FarFieldTTC:
 
     def feed(self, events: np.ndarray):
         """events: numpy array with giantfiber.sim.events.EVENT_DTYPE (sensor coordinates)."""
-        if len(events):
-            ev = np.ascontiguousarray(events)
-            _lib().gf_ff_feed(self._h, ev.ctypes.data, len(ev))
+        if len(events) == 0:
+            return
+        if not (hasattr(events, "dtype") and events.dtype.names
+                and {"x", "y", "timestamp_us"} <= set(events.dtype.names)):
+            raise TypeError("events must be a structured array with x, y, timestamp_us fields")
+        ev = np.ascontiguousarray(events)
+        _lib().gf_ff_feed(self._h, ev.ctypes.data, len(ev))
 
     def eval(self, now_us: int) -> dict:
         _lib().gf_ff_eval(self._h, now_us, ctypes.byref(self._out))
-        return {k: getattr(self._out, k) for k, _ in C_FarFieldOutput._fields_}
+        return {k: getattr(self._out, k) for k, *_ in C_FarFieldOutput._fields_}
 
     def reset(self):
         _lib().gf_ff_reset(self._h)

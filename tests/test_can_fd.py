@@ -3,11 +3,11 @@ Unit tests for CAN-FD Frame serialization and codec
 """
 
 import unittest
+
 from giantfiber import ReflexAction, ReflexDecision, ReflexVector
 from giantfiber.integrations.can_fd import (
-    CANFDReflexFrame,
     CANFDCodec,
-    crc16_ccitt,
+    CANFDReflexFrame,
 )
 
 
@@ -72,7 +72,7 @@ class TestCANFDIntegration(unittest.TestCase):
 
     def test_rust_and_python_encoders_are_byte_identical(self):
         """The no_std Rust encoder (via the C ABI) and the Python codec produce the same bytes."""
-        from giantfiber.binding import GiantFiberCoreBinding, C_ReflexOutput
+        from giantfiber.binding import C_ReflexOutput, GiantFiberCoreBinding
         from giantfiber.types import EscapeMode
         b = GiantFiberCoreBinding()
         cases = [
@@ -95,7 +95,11 @@ class TestCANFDIntegration(unittest.TestCase):
             self.assertEqual(rust, py, f"case {i}: {rust.hex()} != {py.hex()}")
 
     def test_socketcan_frame_packing(self):
-        from giantfiber.integrations.can_fd import pack_canfd_frame, unpack_canfd_frame, CANFD_MTU
+        from giantfiber.integrations.can_fd import (
+            CANFD_MTU,
+            pack_canfd_frame,
+            unpack_canfd_frame,
+        )
         payload = CANFDCodec.encode(CANFDReflexFrame(action=ReflexAction.BRAKE, confidence=0.5))
         raw = pack_canfd_frame(0x18F02001, payload)
         self.assertEqual(len(raw), CANFD_MTU)

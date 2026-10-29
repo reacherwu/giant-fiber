@@ -26,8 +26,8 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from giantfiber import GiantFiberCoprocessor, ReflexConfig  # noqa: E402
-from giantfiber.sim.events import EventCamera  # noqa: E402
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
+from giantfiber.sim.events import EventCamera
 
 CONFIGS = {
     # Engine defaults
@@ -82,7 +82,7 @@ def run(stim, cfg, R=0.15, dt_us=1000, seed=0, noise_hz=0.0, max_s=12.0, offset_
         s = gf.debug_state()
         theta_true = 2 * math.degrees(math.asin(min(1.0, R / math.dist((0, 0, 0), p)))) if p else 0.0
         trace.append((t, theta_true, s["theta_deg"], s["theta_dot_dps"], max(s["v_gf"]), max(s["v_nongf"]), int(d.escape_mode), ttc_ms))
-        rec = dict(t=t, ttc_ms=ttc_ms, theta_true=theta_true, theta_est=s["theta_deg"])
+        rec = {"t": t, "ttc_ms": ttc_ms, "theta_true": theta_true, "theta_est": s["theta_deg"]}
         if s["last_gf_spike_us"] and "gf_spike" not in first:
             first["gf_spike"] = rec
         if d.triggered:
@@ -114,7 +114,7 @@ def main():
             tr, first = run("loom", cfg, R=R, rv_ms=rv, z0=z0, seed=rep, offset_x=0.02 * (rep - 2))
             if rep == 0:
                 traces[rv] = tr
-            row = dict(stimulus="loom", rv_ms=rv, repeat=rep)
+            row = {"stimulus": "loom", "rv_ms": rv, "repeat": rep}
             ep = first.get("episode1")
             row["onset_t_before_contact_ms"] = round(ep["ttc_ms"], 2) if ep else ""
             row["onset_theta_true_deg"] = round(ep["theta_true"], 2) if ep else ""
@@ -129,7 +129,7 @@ def main():
         for rep in range(args.repeats):
             tr, first = run(stim, cfg, R=R, seed=100 + rep, **extra)
             label = stim + (f"_{extra['noise_hz']}Hz_per_px" if extra else "")
-            controls.append(dict(stimulus=label, repeat=rep, escapes=int("episode1" in first), gf_spike=int("gf_spike" in first)))
+            controls.append({"stimulus": label, "repeat": rep, "escapes": int("episode1" in first), "gf_spike": int("gf_spike" in first)})
 
     with open(os.path.join(args.out, "looming_validation.csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
@@ -155,9 +155,9 @@ def main():
         for x in tc:
             xs.append(rv)
             ys.append(x)
-        ent = dict(rv_ms=rv, n=len(rr), gf_theta_mean=float(np.mean(th)) if th else None,
-                   gf_t_before_contact_mean=float(np.mean(tc)) if tc else None,
-                   gf_short_first=short_first, long_then_short=upgraded, long_only=long_only, none=none)
+        ent = {"rv_ms": rv, "n": len(rr), "gf_theta_mean": float(np.mean(th)) if th else None,
+                   "gf_t_before_contact_mean": float(np.mean(tc)) if tc else None,
+                   "gf_short_first": short_first, "long_then_short": upgraded, "long_only": long_only, "none": none}
         summary["looming"].append(ent)
         print(f"{rv:7.0f} {len(rr):3d} {ent['gf_theta_mean'] if th else float('nan'):26.1f} {ent['gf_t_before_contact_mean'] if tc else float('nan'):29.1f} "
               f"{(short_first + upgraded) / len(rr):16.2f} {long_only:10d} {none:10d}")
@@ -166,7 +166,7 @@ def main():
         r = np.corrcoef(xs, ys)[0, 1]
         # slope of t_before_contact vs r/v for a fixed angular threshold theta*: t = (r/v)/tan(theta*/2)
         theta_star = 2 * math.degrees(math.atan(1.0 / slope)) if slope > 0 else float("nan")
-        summary["fit"] = dict(slope=float(slope), intercept_ms=float(icpt), r=float(r), implied_threshold_deg=theta_star)
+        summary["fit"] = {"slope": float(slope), "intercept_ms": float(icpt), "r": float(r), "implied_threshold_deg": theta_star}
         print(f"Linear fit GF-spike time-before-contact = {slope:.2f} * r/v + {icpt:.1f} ms (r = {r:.3f}); implied angular threshold = {theta_star:.1f} deg")
     for c in controls:
         summary["controls"].setdefault(c["stimulus"], 0)

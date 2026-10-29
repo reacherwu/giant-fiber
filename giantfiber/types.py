@@ -4,8 +4,8 @@ Pydantic models for the discrete action contract returned by the engine.
 """
 
 from enum import IntEnum
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReflexAction(IntEnum):
@@ -72,7 +72,7 @@ class EventPacket(BaseModel):
     """Batch of neuromorphic event spikes."""
     model_config = ConfigDict(frozen=True)
 
-    events: List[EventSpike] = Field(default_factory=list)
+    events: list[EventSpike] = Field(default_factory=list)
     sensor_width: int = Field(default=320)
     sensor_height: int = Field(default=320)
 

@@ -6,13 +6,13 @@ and neuromorphic spike interfaces.
 """
 
 from giantfiber.sensors.prophesee_evt import (
+    DecodedSpike,
     PropheseeEVT2Decoder,
     PropheseeEVT3Decoder,
-    DecodedSpike,
 )
 
 __all__ = [
+    "DecodedSpike",
     "PropheseeEVT2Decoder",
     "PropheseeEVT3Decoder",
-    "DecodedSpike",
 ]

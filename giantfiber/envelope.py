@@ -23,10 +23,10 @@ VALIDATED_THREAT_CONE_DEG = (15.0, 8.0)
 #: Camera rig validated in v4: (lens_mm, yaw_deg, pitch_deg) of simulated Sony/Prophesee IMX636 sensors.
 DEFAULT_RIG = [(8.0, 0.0, 0.0)] + [(25.0, y, p) for p in (7.0, 0.0, -7.0) for y in (-12.0, 0.0, 12.0)]
 #: Far-field TTC stage settings frozen for v3/v4 (see giantfiber.farfield.FarFieldConfig).
-DEFAULT_FARFIELD = dict(tau_arm_s=1.0, tau_min_s=0.15, min_fit_span_us=150000, min_t_stat=8.0,
-                        confirm_evals=15, max_miss_radii=6.0)
+DEFAULT_FARFIELD = {"tau_arm_s": 1.0, "tau_min_s": 0.15, "min_fit_span_us": 150000, "min_t_stat": 8.0,
+                        "confirm_evals": 15, "max_miss_radii": 6.0}
 #: Escape command: thrust-axis (climb, or descend if the object passes above), 20 m/s^2 for 1.2 s.
-DEFAULT_ESCAPE = dict(policy="vertical", accel_mps2=20.0, duration_s=1.2)
+DEFAULT_ESCAPE = {"policy": "vertical", "accel_mps2": 20.0, "duration_s": 1.2}
 
 
 class OutsideEnvelopeWarning(UserWarning):

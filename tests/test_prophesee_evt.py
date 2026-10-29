@@ -4,11 +4,11 @@ Unit tests for Prophesee EVT2 and EVT3 raw event stream decoders
 
 import struct
 import unittest
-from giantfiber import ReflexConfig, GiantFiberCoprocessor
+
+from giantfiber import GiantFiberCoprocessor, ReflexConfig
 from giantfiber.sensors.prophesee_evt import (
     PropheseeEVT2Decoder,
     PropheseeEVT3Decoder,
-    DecodedSpike,
 )
 
 

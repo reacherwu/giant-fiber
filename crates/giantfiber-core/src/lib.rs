@@ -75,7 +75,12 @@ impl GiantFiberEngine {
         if !imu.gyro_z.is_finite() {
             return;
         }
-        if self.last_imu_time_us > 0 && imu.timestamp_us > self.last_imu_time_us {
+        // Ignore out-of-order / duplicate samples so a stale timestamp cannot
+        // produce a huge integration step on the next valid sample.
+        if self.last_imu_time_us > 0 && imu.timestamp_us <= self.last_imu_time_us {
+            return;
+        }
+        if self.last_imu_time_us > 0 {
             let dt_s = ((imu.timestamp_us - self.last_imu_time_us) as f32) / 1_000_000.0;
             self.central_complex.update(imu.gyro_z, dt_s);
         }
@@ -165,6 +170,7 @@ impl GiantFiberEngine {
         self.central_complex.target_heading_rad = snapshot.target_heading_rad;
         self.central_complex.state.wedges = snapshot.wedges;
         self.central_complex.state.correction_torque = snapshot.correction_torque;
+        self.central_complex.decode_heading();
         self.config = snapshot.config;
 
         self.accumulator.tau_us = self.config.decay_tau_us;

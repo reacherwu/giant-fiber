@@ -6,9 +6,10 @@ Generates high-resolution, vector-crisp brand assets:
   2. docs/assets/logo_header.png (Master Header Logo for GitHub README)
 """
 
-import os
 import math
-from PIL import Image, ImageDraw, ImageFont
+import os
+
+from PIL import Image, ImageDraw
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "docs", "assets"))
 os.makedirs(ASSETS_DIR, exist_ok=True)
@@ -18,7 +19,7 @@ def draw_glow_circle(draw, center, radius, color, width=2, steps=6):
     cx, cy = center
     r, g, b = color[:3]
     for i in range(steps, 0, -1):
-        alpha = int(35 / i)
+        int(35 / i)
         glow_rad = radius + i * 3
         draw.ellipse(
             [cx - glow_rad, cy - glow_rad, cx + glow_rad, cy + glow_rad],
@@ -85,7 +86,7 @@ def generate_square_logo():
     p_apex = (cx, cy - 150)
     p_left_wing = (cx - 140, cy + 90)
     p_right_wing = (cx + 140, cy + 90)
-    p_inner_center = (cx, cy + 30)
+    (cx, cy + 30)
     p_tail_left = (cx - 45, cy + 130)
     p_tail_right = (cx + 45, cy + 130)
     p_tail_notch = (cx, cy + 90)

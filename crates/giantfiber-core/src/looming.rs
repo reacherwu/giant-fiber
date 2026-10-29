@@ -145,7 +145,7 @@ impl LoomingEstimator {
             t >= horizon && acc.burst_count[y][x] >= MIN_CELL_EVENTS
         });
         let fast_n: u32 = kept.iter().map(|r| r.count_ones()).sum();
-        if fast_n < min_edge_cells.max(3) {
+        if fast_n < min_edge_cells.max(1) {
             // Slow channel: events integrated over SLOW_WINDOW_US (far / slowly expanding objects)
             let slow_horizon = now_us.saturating_sub(SLOW_WINDOW_US);
             kept = Self::edge_cells(acc, |t, y, x| {
@@ -167,7 +167,7 @@ impl LoomingEstimator {
         }
         let mut est = self.estimate;
         est.edge_cells = n;
-        if n < min_edge_cells.max(3) {
+        if n < min_edge_cells.max(1) {
             // No usable stimulus: let the expansion estimate decay towards zero
             est.valid = false;
             est.theta_dot_dps *= 0.5;

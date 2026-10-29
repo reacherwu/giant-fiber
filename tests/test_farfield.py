@@ -1,7 +1,6 @@
-import math
 import numpy as np
 
-from giantfiber.farfield import FarFieldTTC, FarFieldConfig, Derotator
+from giantfiber.farfield import Derotator, FarFieldConfig, FarFieldTTC
 from giantfiber.filters import BackgroundActivityFilter
 from giantfiber.sim.events import imx636_camera, world_to_cam
 

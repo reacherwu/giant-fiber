@@ -1,21 +1,20 @@
 """Unit and integration tests for GiantFiber Python SDK and C-ABI bindings."""
 
-import unittest
 import math
+import unittest
+
 import pydantic
+from _stimuli import run_loom
+
 from giantfiber import (
+    CircuitTrace,
+    EscapeMode,
     GiantFiberCoprocessor,
-    ReflexConfig,
     ReflexAction,
+    ReflexConfig,
     ReflexDecision,
     ReflexVector,
-    CircuitTrace,
-    EventPacket,
-    EventSpike,
-    EscapeMode,
 )
-
-from _stimuli import run_loom
 
 
 class TestPydanticContracts(unittest.TestCase):
@@ -83,7 +82,7 @@ class TestCoprocessorEngine(unittest.TestCase):
         self.assertGreater(st["last_gf_spike_us"], 0)
 
     def test_slow_loom_uses_long_mode(self):
-        decisions, first = self._loom(rv_ms=80.0, z0=6.0, max_s=4.0)
+        _decisions, first = self._loom(rv_ms=80.0, z0=6.0, max_s=4.0)
         self.assertIsNotNone(first, "slow loom must trigger")
         self.assertEqual(first.escape_mode, EscapeMode.LONG)
         self.assertEqual(first.circuit_trace, CircuitTrace.NON_GF_DESCENDING)
